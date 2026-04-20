@@ -1,0 +1,1365 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Editor PDF — Hi-Fi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-0: #1e1e20;           /* window bg */
+    --bg-1: #26262a;           /* panel bg */
+    --bg-2: #2c2c31;           /* raised */
+    --bg-3: #34343a;           /* input/hover */
+    --bg-4: #3d3d44;
+    --canvas: #3a3a3f;         /* canvas gray */
+    --line: #1a1a1c;           /* darker divider */
+    --line-2: #3a3a40;
+    --line-3: #47474e;
+    --ink: #e8e8ea;
+    --ink-2: #b4b4b8;
+    --muted: #7d7d82;
+    --accent: oklch(0.72 0.15 150);   /* green, like reference */
+    --accent-dim: oklch(0.52 0.12 150);
+    --accent-soft: oklch(0.72 0.15 150 / 0.12);
+    --sel: oklch(0.68 0.19 235);      /* blue selection handles */
+    --paper: #fbfbf8;
+    --paper-shadow: rgba(0,0,0,0.45);
+    --danger: oklch(0.65 0.18 25);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg-0);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12px;
+    height: 100vh;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  button { font-family: inherit; color: inherit; }
+  input, select { font-family: inherit; color: inherit; }
+
+  /* ===== App grid ===== */
+  .app {
+    display: grid;
+    grid-template-rows: 30px 34px 38px 1fr 24px;
+    grid-template-columns: 44px 240px 1fr;
+    height: 100vh;
+  }
+  /* Title bar */
+  .titlebar {
+    grid-column: 1 / -1;
+    background: linear-gradient(var(--bg-1), var(--bg-0));
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--ink-2);
+    -webkit-app-region: drag;
+    user-select: none;
+  }
+  .traffic { display: flex; gap: 6px; }
+  .tl { width: 11px; height: 11px; border-radius: 50%; }
+  .tl.c { background: #ff605c; }
+  .tl.m { background: #ffbd44; }
+  .tl.g { background: #00ca4e; }
+  .title {
+    flex: 1;
+    text-align: center;
+    color: var(--ink);
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .title .dot { color: var(--muted); margin: 0 6px; }
+
+  /* Menu bar */
+  .menubar {
+    grid-column: 1 / -1;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    font-size: 12px;
+    gap: 2px;
+  }
+  .menu-item {
+    padding: 6px 10px;
+    color: var(--ink);
+    cursor: default;
+    border-radius: 3px;
+  }
+  .menu-item:hover { background: var(--bg-3); }
+  .menu-spacer { flex: 1; }
+  .menu-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--ink-2);
+  }
+  .menu-btn:hover { background: var(--bg-3); color: var(--ink); }
+  .menu-btn.primary {
+    background: var(--accent);
+    color: #0b1a10;
+    font-weight: 600;
+    padding: 5px 12px;
+  }
+  .menu-btn.primary:hover { background: oklch(0.76 0.16 150); }
+  .menu-btn kbd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  /* Format / toolbar horizontal */
+  .toolbar-h {
+    grid-column: 1 / -1;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 6px;
+  }
+  .tb-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 4px;
+    height: 26px;
+  }
+  .tb-group + .tb-group { border-left: 1px solid var(--line-2); padding-left: 8px; margin-left: 4px; }
+  .tb-sel {
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 6px;
+    gap: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .tb-sel:hover { background: var(--bg-4); }
+  .tb-sel .caret { color: var(--muted); font-size: 9px; }
+  .tb-sel input {
+    background: transparent;
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .tb-num {
+    width: 54px;
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 4px 0 6px;
+    font-size: 12px;
+  }
+  .tb-num input {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    width: 100%;
+  }
+  .tb-num .spin { display: flex; flex-direction: column; gap: 1px; }
+  .tb-num .spin span {
+    width: 0; height: 0;
+    border-left: 4px solid transparent; border-right: 4px solid transparent;
+    cursor: pointer;
+  }
+  .tb-num .spin span:first-child { border-bottom: 4px solid var(--muted); }
+  .tb-num .spin span:last-child { border-top: 4px solid var(--muted); }
+
+  .tb-btn {
+    width: 22px; height: 22px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--ink-2);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .tb-btn:hover { background: var(--bg-3); color: var(--ink); }
+  .tb-btn.on { background: var(--bg-4); color: var(--accent); border-color: var(--line-3); }
+  .tb-btn svg { width: 14px; height: 14px; }
+
+  .swatch {
+    width: 22px; height: 22px;
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    background: var(--bg-3);
+    position: relative;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .swatch::after {
+    content: '';
+    width: 14px; height: 3px;
+    background: var(--ink);
+    position: absolute;
+    bottom: 3px;
+  }
+  .swatch .caret {
+    position: absolute;
+    bottom: -1px;
+    right: 0;
+    font-size: 7px;
+    color: var(--muted);
+  }
+
+  /* Toolbar vertical */
+  .toolbar-v {
+    grid-column: 1;
+    grid-row: 4;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 6px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .vt-btn {
+    width: 32px; height: 32px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--ink-2);
+    position: relative;
+  }
+  .vt-btn:hover { background: var(--bg-3); color: var(--ink); }
+  .vt-btn.on {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: var(--accent-dim);
+  }
+  .vt-btn svg { width: 16px; height: 16px; }
+  .vt-sep {
+    width: 22px; height: 1px; background: var(--line-2);
+    margin: 4px 0;
+  }
+  .vt-btn .kbd {
+    position: absolute;
+    bottom: 1px; right: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    color: var(--muted);
+  }
+
+  /* Left panel (layout tree + properties) */
+  .leftpanel {
+    grid-column: 2;
+    grid-row: 4;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: grid;
+    grid-template-rows: 1fr 4px 1fr;
+    min-height: 0;
+  }
+  .panel-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .panel-head {
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  .panel-head .tools {
+    display: flex; gap: 2px;
+  }
+  .panel-head .tools button {
+    width: 18px; height: 18px;
+    border: none; background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 2px;
+    font-size: 11px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .panel-head .tools button:hover { background: var(--bg-3); color: var(--ink); }
+  .panel-body {
+    flex: 1;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-3) transparent;
+  }
+  .panel-body::-webkit-scrollbar { width: 8px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--line-3); border-radius: 4px; }
+  .splitter {
+    background: var(--line);
+    cursor: row-resize;
+  }
+
+  /* Tree */
+  .tree { padding: 2px 0; font-size: 12px; }
+  .node {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px 3px 6px;
+    cursor: pointer;
+    position: relative;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .node:hover { background: var(--bg-2); }
+  .node.sel { background: var(--accent-soft); color: var(--accent); }
+  .node.sel.active { background: var(--accent); color: #0b1a10; }
+  .node .chev {
+    width: 10px; height: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 8px;
+    color: var(--muted);
+    transition: transform 0.1s;
+  }
+  .node .chev.open { transform: rotate(90deg); }
+  .node .chev.leaf { visibility: hidden; }
+  .node .ico {
+    width: 14px; height: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ink-2);
+  }
+  .node.sel.active .ico, .node.sel.active .chev { color: #0b1a10; }
+  .node .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .node .count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .node[data-level="1"] { padding-left: 18px; }
+  .node[data-level="2"] { padding-left: 32px; }
+  .node[data-level="3"] { padding-left: 46px; }
+
+  /* Properties */
+  .props-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-1);
+    padding: 0 4px;
+  }
+  .props-tab {
+    padding: 6px 8px;
+    font-size: 11px;
+    color: var(--ink-2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    user-select: none;
+  }
+  .props-tab:hover { color: var(--ink); }
+  .props-tab.on {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .props-breadcrumb {
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--ink-2);
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .props-breadcrumb .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .props-breadcrumb b { color: var(--ink); font-weight: 500; }
+  .field-grid {
+    padding: 8px 10px;
+    display: grid;
+    grid-template-columns: 68px 1fr 1fr;
+    gap: 6px 6px;
+    align-items: center;
+  }
+  .field-grid label {
+    grid-column: 1;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: capitalize;
+  }
+  .input {
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    padding: 3px 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    height: 22px;
+  }
+  .input input {
+    background: transparent;
+    border: none;
+    outline: none;
+    width: 100%;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    text-align: right;
+  }
+  .input .unit { color: var(--muted); font-size: 10px; }
+  .input.full { grid-column: 2 / 4; }
+  .sect-sep {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line-2);
+    margin: 6px -10px 2px;
+  }
+  .sect-title {
+    grid-column: 1 / -1;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin: 4px 0 2px;
+    font-weight: 600;
+  }
+
+  .btn-group {
+    display: inline-flex;
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    overflow: hidden;
+    height: 22px;
+  }
+  .btn-group button {
+    background: var(--bg-3);
+    border: none;
+    padding: 0 8px;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 11px;
+    border-right: 1px solid var(--line-2);
+  }
+  .btn-group button:last-child { border-right: none; }
+  .btn-group button.on { background: var(--accent); color: #0b1a10; }
+  .btn-group button:hover:not(.on) { background: var(--bg-4); color: var(--ink); }
+
+  /* Canvas */
+  .canvas-wrap {
+    grid-column: 3;
+    grid-row: 4;
+    position: relative;
+    overflow: hidden;
+    background: var(--canvas);
+  }
+  .ruler {
+    position: absolute;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    overflow: hidden;
+    user-select: none;
+  }
+  .ruler-h {
+    top: 0; left: 20px; right: 0;
+    height: 20px;
+  }
+  .ruler-v {
+    top: 20px; left: 0; bottom: 0;
+    width: 20px;
+  }
+  .ruler-corner {
+    top: 0; left: 0;
+    width: 20px; height: 20px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    position: absolute;
+    z-index: 2;
+  }
+  .ruler svg { display: block; }
+
+  .canvas-scroll {
+    position: absolute;
+    top: 20px; left: 20px;
+    right: 0; bottom: 0;
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 40px 80px;
+    scrollbar-color: var(--line-3) transparent;
+  }
+  .canvas-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+  .canvas-scroll::-webkit-scrollbar-thumb { background: var(--line-3); border-radius: 5px; }
+
+  .sheet {
+    background: var(--paper);
+    color: #111;
+    /* Dimensions in px scaled — A4 at ~2.2 px/mm */
+    width: calc(210px * 2.2);
+    height: calc(297px * 2.2);
+    position: relative;
+    box-shadow: 0 2px 20px var(--paper-shadow), 0 0 0 1px rgba(0,0,0,0.4);
+    flex-shrink: 0;
+  }
+  .sheet .margin-guide {
+    position: absolute;
+    inset: 30px;
+    border: 1px dashed oklch(0.72 0.15 150 / 0.55);
+    pointer-events: none;
+  }
+  .sheet .el {
+    position: absolute;
+    font-family: 'Inter', sans-serif;
+  }
+  .sheet .el.selected {
+    outline: 2px solid var(--sel);
+    outline-offset: 0;
+  }
+  .handle {
+    position: absolute;
+    width: 8px; height: 8px;
+    background: var(--paper);
+    border: 1.5px solid var(--sel);
+    z-index: 5;
+  }
+  .handle.tl { top: -5px; left: -5px; cursor: nwse-resize; }
+  .handle.tr { top: -5px; right: -5px; cursor: nesw-resize; }
+  .handle.bl { bottom: -5px; left: -5px; cursor: nesw-resize; }
+  .handle.br { bottom: -5px; right: -5px; cursor: nwse-resize; }
+  .handle.tm { top: -5px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+  .handle.bm { bottom: -5px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+  .handle.lm { top: 50%; left: -5px; transform: translateY(-50%); cursor: ew-resize; }
+  .handle.rm { top: 50%; right: -5px; transform: translateY(-50%); cursor: ew-resize; }
+  .handle.rot {
+    top: -22px; left: 50%; transform: translateX(-50%);
+    border-radius: 50%;
+    width: 10px; height: 10px;
+    cursor: grab;
+  }
+  .handle.rot::before {
+    content: '';
+    position: absolute;
+    top: 9px; left: 50%;
+    width: 1px; height: 10px;
+    background: var(--sel);
+  }
+
+  /* Status bar */
+  .statusbar {
+    grid-column: 1 / -1;
+    background: var(--bg-1);
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--ink-2);
+  }
+  .statusbar .st-btn {
+    background: transparent;
+    border: none;
+    padding: 0 4px;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+  }
+  .statusbar .st-btn:hover { color: var(--ink); }
+  .statusbar .sep { width: 1px; height: 14px; background: var(--line-2); }
+  .statusbar .push { margin-left: auto; }
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+  }
+
+  /* Zoom pill */
+  .zoom {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .zoom button {
+    width: 20px; height: 18px;
+    background: transparent;
+    border: 1px solid var(--line-2);
+    border-radius: 2px;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+  }
+  .zoom button:hover { background: var(--bg-3); color: var(--ink); }
+  .zoom .zv {
+    font-family: 'JetBrains Mono', monospace;
+    min-width: 44px;
+    text-align: center;
+  }
+
+  /* Page nav */
+  .page-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* small icon util */
+  .ico-sm { width: 12px; height: 12px; }
+
+  /* Tooltip helper */
+  .vt-btn[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg-0);
+    border: 1px solid var(--line-3);
+    color: var(--ink);
+    padding: 3px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+    border-radius: 3px;
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  /* Tweak panel (floating) */
+  .tweaks {
+    position: fixed;
+    right: 20px;
+    bottom: 48px;
+    width: 240px;
+    background: var(--bg-1);
+    border: 1px solid var(--line-3);
+    border-radius: 5px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    padding: 10px 12px;
+    z-index: 80;
+    display: none;
+  }
+  .tweaks.on { display: block; }
+  .tweaks h3 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .tweaks h3 .cx { cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1; }
+  .tweak-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 12px;
+  }
+  .tgl {
+    width: 30px; height: 16px;
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+    position: relative;
+    cursor: pointer;
+  }
+  .tgl::after {
+    content: '';
+    position: absolute;
+    top: 1px; left: 1px;
+    width: 12px; height: 12px;
+    background: var(--ink-2);
+    border-radius: 50%;
+    transition: left 0.12s, background 0.12s;
+  }
+  .tgl.on { background: var(--accent-dim); border-color: var(--accent); }
+  .tgl.on::after { left: 15px; background: var(--accent); }
+
+  /* Hide states */
+  .hide { display: none !important; }
+
+  /* ===== A4 icon helpers ===== */
+  .page-sep {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 1px;
+    background: var(--line-2);
+  }
+</style>
+</head>
+<body>
+
+<div class="app" data-screen-label="01 Editor PDF Hi-Fi">
+
+  <!-- ============ Title bar ============ -->
+  <header class="titlebar">
+    <div class="traffic">
+      <span class="tl c"></span>
+      <span class="tl m"></span>
+      <span class="tl g"></span>
+    </div>
+    <div class="title">pdfsketch <span class="dot">·</span> plantilla_factura_abril.pdfs <span class="dot">·</span> <span style="color:var(--muted);">borrador</span></div>
+    <div style="color:var(--muted); font-size:11px;">v1.3.0</div>
+  </header>
+
+  <!-- ============ Menu bar ============ -->
+  <nav class="menubar">
+    <div class="menu-item">Archivo</div>
+    <div class="menu-item">Editar</div>
+    <div class="menu-item">Ver</div>
+    <div class="menu-item">Insertar</div>
+    <div class="menu-item">Formato</div>
+    <div class="menu-item">Datos</div>
+    <div class="menu-item">Ayuda</div>
+    <div class="menu-spacer"></div>
+    <button class="menu-btn" title="Deshacer">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8h6a3 3 0 010 6H5"/><path d="M6 5L3 8l3 3"/></svg>
+      <span>Deshacer</span><kbd>⌘Z</kbd>
+    </button>
+    <button class="menu-btn" title="Rehacer">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 8H6a3 3 0 000 6h5"/><path d="M10 5l3 3-3 3"/></svg>
+      <span>Rehacer</span><kbd>⌘⇧Z</kbd>
+    </button>
+    <div style="width: 10px;"></div>
+    <button class="menu-btn primary">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h7l3 3v7a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1z"/><path d="M10 3v3h3"/><path d="M5 10h6M5 12h4"/></svg>
+      Exportar PDF
+    </button>
+  </nav>
+
+  <!-- ============ Horizontal toolbar (format) ============ -->
+  <div class="toolbar-h">
+    <!-- Font family/subfamily/size/unit -->
+    <div class="tb-group">
+      <div class="tb-sel" style="width: 130px;">
+        <input value="Inter" />
+        <span class="caret">▾</span>
+      </div>
+      <div class="tb-sel" style="width: 86px;">
+        <input value="Regular" />
+        <span class="caret">▾</span>
+      </div>
+      <div class="tb-num">
+        <input value="10" />
+        <div class="spin"><span></span><span></span></div>
+      </div>
+      <div class="tb-sel" style="width: 48px;">
+        <input value="pt" />
+        <span class="caret">▾</span>
+      </div>
+    </div>
+
+    <!-- Font styles -->
+    <div class="tb-group">
+      <button class="tb-btn on" title="Negrita" style="font-weight:700;">B</button>
+      <button class="tb-btn" title="Cursiva" style="font-style:italic;">I</button>
+      <button class="tb-btn" title="Subrayado" style="text-decoration:underline;">U</button>
+      <button class="tb-btn" title="Tachado" style="text-decoration:line-through;">S</button>
+      <!-- Color -->
+      <div class="swatch" title="Color de texto">
+        <span class="caret">▾</span>
+      </div>
+    </div>
+
+    <!-- Paragraph alignment -->
+    <div class="tb-group">
+      <button class="tb-btn" title="Alinear izquierda">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 7h8M2 10h12M2 13h6"/></svg>
+      </button>
+      <button class="tb-btn on" title="Centrar">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M4 7h8M2 10h12M4 13h8"/></svg>
+      </button>
+      <button class="tb-btn" title="Alinear derecha">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M6 7h8M2 10h12M8 13h6"/></svg>
+      </button>
+    </div>
+
+    <!-- Justification -->
+    <div class="tb-group">
+      <button class="tb-btn" title="Justificar izquierda">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 7h10M2 10h12M2 13h12"/></svg>
+      </button>
+      <button class="tb-btn" title="Justificar centro">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M3 7h10M2 10h12M3 13h10"/></svg>
+      </button>
+      <button class="tb-btn" title="Justificar derecha">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M4 7h10M2 10h12M4 13h10"/></svg>
+      </button>
+      <button class="tb-btn" title="Justificar bloque">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 7h12M2 10h12M2 13h12"/></svg>
+      </button>
+    </div>
+
+    <!-- Paragraph style selector -->
+    <div class="tb-group" style="margin-left: auto;">
+      <div class="tb-sel" style="width: 150px;">
+        <input value="Normal" />
+        <span class="caret">▾</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Vertical toolbar ============ -->
+  <aside class="toolbar-v">
+    <!-- Grupo selección / navegación -->
+    <button class="vt-btn on" data-tip="Seleccionar (V)" title="Seleccionar">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l9 6-4 1 2 4-1.5 1-2-4-3 3V2z"/></svg>
+    </button>
+    <button class="vt-btn" data-tip="Mover / mano (H)" title="Mover">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2v6M8 8V5M8 8V5M5 8V6a1 1 0 112 0M5 8V7a1 1 0 112 0M9 8V6a1 1 0 112 0v3M11 9V7a1 1 0 112 0v4a4 4 0 01-4 4H7a3 3 0 01-3-3l-1-2"/></svg>
+    </button>
+    <div class="vt-sep"></div>
+
+    <!-- Grupo dibujo / contenido -->
+    <button class="vt-btn" data-tip="Texto (T)" title="Texto">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4V3h10v1M8 3v10M5 13h6"/></svg>
+    </button>
+    <button class="vt-btn" data-tip="Rectángulo (R)" title="Rectángulo">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="4.5" width="11" height="7" rx="1"/></svg>
+    </button>
+    <button class="vt-btn" data-tip="Círculo (O)" title="Círculo">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5.5"/></svg>
+    </button>
+    <button class="vt-btn" data-tip="Línea (L)" title="Línea">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13L13 3"/></svg>
+    </button>
+    <button class="vt-btn" data-tip="Lápiz (P)" title="Lápiz / Dibujo libre">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13l2-1 7-7-1-1-7 7-1 2z"/><path d="M11 4l1 1"/></svg>
+    </button>
+    <div class="vt-sep"></div>
+
+    <!-- Grupo inserción -->
+    <button class="vt-btn" data-tip="Imagen (I)" title="Imagen">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1"/><circle cx="6" cy="7" r="1.2"/><path d="M2.5 12l3-3 2.5 2 3-3 4.5 4"/></svg>
+    </button>
+    <button class="vt-btn" data-tip="Tabla" title="Tabla">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10"/><path d="M2 7h12M2 10h12M6 3v10M10 3v10"/></svg>
+    </button>
+    <button class="vt-btn" data-tip="QR / Código" title="QR">
+      <svg viewBox="0 0 16 16" fill="currentColor"><rect x="2" y="2" width="4" height="4"/><rect x="10" y="2" width="4" height="4"/><rect x="2" y="10" width="4" height="4"/><rect x="3" y="3" width="2" height="2" fill="var(--bg-1)"/><rect x="11" y="3" width="2" height="2" fill="var(--bg-1)"/><rect x="3" y="11" width="2" height="2" fill="var(--bg-1)"/><rect x="7" y="2" width="1" height="3"/><rect x="10" y="7" width="1" height="2"/><rect x="13" y="8" width="1" height="3"/><rect x="8" y="10" width="2" height="1"/><rect x="11" y="13" width="3" height="1"/></svg>
+    </button>
+  </aside>
+
+  <!-- ============ Left panel: tree + properties ============ -->
+  <section class="leftpanel">
+    <!-- Layout Tree -->
+    <div class="panel-section">
+      <div class="panel-head">
+        <span>Layout Tree</span>
+        <div class="tools">
+          <button title="Añadir">＋</button>
+          <button title="Buscar">⌕</button>
+          <button title="Más">⋯</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="tree" id="tree">
+          <div class="node" data-level="0" data-key="data">
+            <span class="chev">▶</span>
+            <span class="ico">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><ellipse cx="7" cy="3.5" rx="5" ry="1.8"/><path d="M2 3.5v7c0 1 2.2 1.8 5 1.8s5-.8 5-1.8v-7"/><path d="M2 7c0 1 2.2 1.8 5 1.8s5-.8 5-1.8"/></svg>
+            </span>
+            <span class="lbl">Data</span>
+            <span class="count">3</span>
+          </div>
+
+          <div class="node" data-level="0" data-key="pages">
+            <span class="chev open">▶</span>
+            <span class="ico">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 2h6l3 3v7H3z"/><path d="M9 2v3h3"/></svg>
+            </span>
+            <span class="lbl">Pages</span>
+            <span class="count">4</span>
+          </div>
+          <div class="node" data-level="1">
+            <span class="chev leaf">·</span>
+            <span class="ico"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="2" width="8" height="10"/></svg></span>
+            <span class="lbl">Page H Tiro ExtractoPatrocinadoras</span>
+          </div>
+          <div class="node" data-level="1">
+            <span class="chev leaf">·</span>
+            <span class="ico"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="2" width="8" height="10"/></svg></span>
+            <span class="lbl">Page H Retiro ExtractoPatrocinadoras</span>
+          </div>
+          <div class="node" data-level="1">
+            <span class="chev leaf">·</span>
+            <span class="ico"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="2" width="8" height="10"/></svg></span>
+            <span class="lbl">Page H Anexo ExtractoPatrocinadoras</span>
+          </div>
+          <div class="node sel active" data-level="1">
+            <span class="chev leaf">·</span>
+            <span class="ico"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="2" width="8" height="10"/></svg></span>
+            <span class="lbl">Page 1</span>
+          </div>
+
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">⇄</span><span class="lbl">DynamicCommunications</span><span class="count">2</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="10" height="10"/><path d="M2 7h10M7 2v10"/></svg>
+          </span><span class="lbl">Elements</span><span class="count">12</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">⇢</span><span class="lbl">Flows</span><span class="count">2</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">¶</span><span class="lbl">ParagraphStyles</span><span class="count">5</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">Aa</span><span class="lbl">TextStyles</span><span class="count">8</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">Ƒ</span><span class="lbl">Fonts</span><span class="count">3</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="10" height="10"/></svg>
+          </span><span class="lbl">BorderStyles</span><span class="count">4</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">—</span><span class="lbl">LineStyles</span><span class="count">3</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">
+            <svg viewBox="0 0 14 14" fill="currentColor"><rect x="2" y="2" width="10" height="10"/></svg>
+          </span><span class="lbl">FillStyles</span><span class="count">6</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="7" cy="7" r="5"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>
+          </span><span class="lbl">Colors</span><span class="count">9</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="10" height="8"/><circle cx="5" cy="6" r="1"/><path d="M2 10l3-3 2 2 3-3 4 4"/></svg>
+          </span><span class="lbl">Images</span><span class="count">4</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="10" height="8"/><path d="M2 6h10M2 9h10M5 3v8M9 3v8"/></svg>
+          </span><span class="lbl">Tables</span><span class="count">3</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">≡</span><span class="lbl">RowSets</span><span class="count">2</span></div>
+          <div class="node" data-level="0"><span class="chev">▶</span><span class="ico">▦</span><span class="lbl">Cells</span><span class="count">6</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="splitter"></div>
+
+    <!-- Layout Properties -->
+    <div class="panel-section">
+      <div class="panel-head">
+        <span>Layout Properties</span>
+        <div class="tools">
+          <button title="Colapsar">⇅</button>
+          <button title="Más">⋯</button>
+        </div>
+      </div>
+
+      <div class="props-breadcrumb">
+        <span class="dot"></span>
+        <b>Page 1</b>
+        <span style="color:var(--muted);">— Page</span>
+      </div>
+
+      <div class="props-tabs">
+        <div class="props-tab on">Posición</div>
+        <div class="props-tab">General</div>
+        <div class="props-tab">Guías</div>
+        <div class="props-tab">Heads</div>
+        <div class="props-tab">…</div>
+      </div>
+
+      <div class="panel-body">
+        <div class="field-grid">
+          <div class="sect-title">Posición</div>
+          <label>X</label>
+          <div class="input"><input value="0.00" /><span class="unit">mm</span></div>
+          <div class="input"><input value="Y" readonly style="text-align:left; color:var(--muted);" /><span class="mono" style="color:var(--ink);">0.00</span><span class="unit">mm</span></div>
+
+          <label>Y</label>
+          <div class="input full"><input value="0.00" /><span class="unit">mm</span></div>
+
+          <div class="sect-title">Tamaño</div>
+          <label>Ancho</label>
+          <div class="input"><input value="210.00" /><span class="unit">mm</span></div>
+          <div class="input"><input value="A4" readonly /><span style="color:var(--muted); font-size:9px;">preset</span></div>
+
+          <label>Alto</label>
+          <div class="input full"><input value="297.00" /><span class="unit">mm</span></div>
+
+          <div class="sect-title">Transformación</div>
+          <label>Rotación</label>
+          <div class="input full"><input value="0.00" /><span class="unit">°</span></div>
+
+          <label>Visible</label>
+          <div style="grid-column: 2 / 4;" class="btn-group">
+            <button class="on">Sí</button>
+            <button>No</button>
+          </div>
+
+          <div class="sect-title">Página</div>
+          <label>Peso</label>
+          <div class="input full"><input value="5.00" /><span class="unit">g/m²</span></div>
+
+          <label>Fondo</label>
+          <div class="input full" style="justify-content:flex-start; gap:8px;">
+            <span style="width:14px; height:14px; background:#fff; border:1px solid var(--line-3);"></span>
+            <span>White</span>
+            <span style="margin-left:auto; color:var(--muted);">▾</span>
+          </div>
+
+          <label>Repetir</label>
+          <div class="input full" style="justify-content:flex-start;">
+            <span>Empty</span>
+            <span style="margin-left:auto; color:var(--muted);">▾</span>
+          </div>
+
+          <label>Añadir alto</label>
+          <div class="input full"><input value="5.00" /><span class="unit">mm</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Canvas ============ -->
+  <section class="canvas-wrap" id="canvasWrap">
+    <div class="ruler-corner"></div>
+    <div class="ruler ruler-h">
+      <svg width="100%" height="20" viewBox="0 0 1200 20" preserveAspectRatio="none">
+        <g fill="none" stroke="#7d7d82" stroke-width="1">
+          <!-- Every 10mm tick -->
+          <g id="ticksH"></g>
+        </g>
+      </svg>
+    </div>
+    <div class="ruler ruler-v">
+      <svg width="20" height="100%" viewBox="0 0 20 1600" preserveAspectRatio="none">
+        <g fill="none" stroke="#7d7d82" stroke-width="1">
+          <g id="ticksV"></g>
+        </g>
+      </svg>
+    </div>
+
+    <div class="canvas-scroll">
+      <div class="sheet" id="sheet">
+        <div class="margin-guide"></div>
+        <!-- Elements -->
+        <div class="el" style="left: 30px; top: 30px; width: 160px; height: 50px; background: #f2f2ef; border: 1px solid #ddd; display:flex; align-items:center; padding: 0 12px;">
+          <div style="font-family:'Inter'; font-weight:700; font-size:14px; color:#222;">LOGO<span style="color:#888; font-weight:400; font-size:10px; margin-left:6px;">· imagen</span></div>
+        </div>
+        <div class="el" style="right: 30px; top: 30px; width: 220px; height: 50px; text-align:right;">
+          <div style="font-size:11px; color:#555; font-family:'JetBrains Mono';">{ cliente.nombre }</div>
+          <div style="font-size:10px; color:#888; font-family:'JetBrains Mono';">{ cliente.nit }</div>
+          <div style="font-size:10px; color:#888; font-family:'JetBrains Mono'; margin-top:4px;">{ cliente.direccion }</div>
+        </div>
+
+        <div class="el selected" style="left: 30px; top: 110px; width: calc(100% - 60px); height: 44px; background: oklch(0.72 0.15 150 / 0.08); padding: 10px 14px;">
+          <div style="font-size:16px; font-weight:600; color:#111;">Factura #<span style="color:var(--accent-dim); font-family:'JetBrains Mono';">{ factura.id }</span></div>
+          <div style="font-size:10px; color:#666; font-family:'JetBrains Mono';">fecha: { factura.fecha } · vencimiento: { factura.vence }</div>
+          <!-- handles -->
+          <span class="handle rot"></span>
+          <span class="handle tl"></span>
+          <span class="handle tm"></span>
+          <span class="handle tr"></span>
+          <span class="handle lm"></span>
+          <span class="handle rm"></span>
+          <span class="handle bl"></span>
+          <span class="handle bm"></span>
+          <span class="handle br"></span>
+        </div>
+
+        <div class="el" style="left: 30px; top: 175px; width: calc(100% - 60px); height: 220px; border: 1px solid #ddd;">
+          <div style="display:grid; grid-template-columns: 3fr 1fr 1.2fr 1.2fr; background:#f2f2ef; border-bottom: 1px solid #ddd; padding: 6px 10px; font-size:10px; color:#555; font-weight:600; text-transform: uppercase; letter-spacing:0.4px;">
+            <span>Descripción</span><span style="text-align:right;">Cant.</span><span style="text-align:right;">Precio</span><span style="text-align:right;">Total</span>
+          </div>
+          <div style="padding: 4px 10px;">
+            <div style="display:grid; grid-template-columns: 3fr 1fr 1.2fr 1.2fr; padding: 6px 0; border-bottom:1px dashed #eee; font-size:11px; font-family: 'JetBrains Mono'; color:#333;">
+              <span>{ item.nombre }</span><span style="text-align:right;">{ item.qty }</span><span style="text-align:right;">{ item.precio }</span><span style="text-align:right;">{ item.total }</span>
+            </div>
+            <div style="display:grid; grid-template-columns: 3fr 1fr 1.2fr 1.2fr; padding: 6px 0; border-bottom:1px dashed #eee; font-size:10px; font-family: 'JetBrains Mono'; color:#999;">
+              <span>— fila repetible —</span><span></span><span></span><span></span>
+            </div>
+            <div style="display:grid; grid-template-columns: 3fr 1fr 1.2fr 1.2fr; padding: 6px 0; border-bottom:1px dashed #eee; font-size:10px; font-family: 'JetBrains Mono'; color:#bbb;">
+              <span>—</span><span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="el" style="right: 30px; top: 410px; width: 220px; background: #111; color: #fff; padding: 10px 14px;">
+          <div style="font-size: 10px; color: oklch(0.72 0.15 150); letter-spacing:1px; text-transform: uppercase;">Total a pagar</div>
+          <div style="font-size: 22px; font-weight: 700; font-family:'JetBrains Mono'; margin-top:4px;">$ { factura.total }</div>
+        </div>
+
+        <div class="el" style="left: 30px; bottom: 60px; width: 70px; height: 70px; background: #fff; border: 1px solid #ddd; display:grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: repeat(7,1fr); gap:1px; padding: 4px;">
+          <!-- QR mock -->
+          <div style="background:#111"></div><div></div><div style="background:#111"></div><div style="background:#111"></div><div></div><div></div><div style="background:#111"></div>
+          <div></div><div style="background:#111"></div><div></div><div style="background:#111"></div><div></div><div style="background:#111"></div><div></div>
+          <div style="background:#111"></div><div></div><div style="background:#111"></div><div></div><div style="background:#111"></div><div></div><div style="background:#111"></div>
+          <div></div><div style="background:#111"></div><div></div><div style="background:#111"></div><div style="background:#111"></div><div></div><div style="background:#111"></div>
+          <div style="background:#111"></div><div></div><div style="background:#111"></div><div></div><div></div><div style="background:#111"></div><div></div>
+          <div></div><div style="background:#111"></div><div></div><div style="background:#111"></div><div style="background:#111"></div><div></div><div style="background:#111"></div>
+          <div style="background:#111"></div><div></div><div style="background:#111"></div><div></div><div style="background:#111"></div><div style="background:#111"></div><div></div>
+        </div>
+
+        <div class="el" style="left: 110px; bottom: 75px; right: 30px; height: 40px; font-size: 9px; color: #888; line-height: 1.4; font-family: 'Inter';">
+          Este documento es un comprobante electrónico generado automáticamente. Cualquier alteración<br/>
+          invalida su contenido. Consulte su validez escaneando el código QR.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Status bar ============ -->
+  <footer class="statusbar">
+    <div class="zoom">
+      <button title="Reducir">−</button>
+      <div class="zv mono">100 %</div>
+      <button title="Aumentar">+</button>
+    </div>
+    <div class="sep"></div>
+    <div class="page-nav">
+      <button class="st-btn" title="Primera">⏮</button>
+      <button class="st-btn" title="Anterior">◀</button>
+      <div class="tb-num" style="width: 60px; height:18px;">
+        <input value="1" style="font-size:10px;" />
+        <div class="spin"><span></span><span></span></div>
+      </div>
+      <span class="mono" style="color:var(--muted);">/ 4</span>
+      <button class="st-btn" title="Siguiente">▶</button>
+      <button class="st-btn" title="Última">⏭</button>
+    </div>
+    <div class="sep"></div>
+    <div class="mono">x: <span style="color:var(--ink);">87.40</span>mm</div>
+    <div class="mono">y: <span style="color:var(--ink);">122.65</span>mm</div>
+    <div class="sep"></div>
+    <button class="st-btn" title="Cuadrícula">
+      <svg class="ico-sm" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1"><rect x="1.5" y="1.5" width="9" height="9"/><path d="M1.5 4.5h9M1.5 7.5h9M4.5 1.5v9M7.5 1.5v9"/></svg>
+      Grid
+    </button>
+    <button class="st-btn" title="Snap">
+      <svg class="ico-sm" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1"><path d="M6 1v10M1 6h10"/><rect x="4" y="4" width="4" height="4"/></svg>
+      Snap
+    </button>
+    <div class="push"></div>
+    <div class="mono" style="color:var(--muted);">A4 · 210×297mm</div>
+    <div class="sep"></div>
+    <div style="display:flex; align-items:center; gap:5px;">
+      <span class="status-dot"></span>
+      <span style="color:var(--ink-2);">guardado hace 12s</span>
+    </div>
+  </footer>
+
+</div>
+
+<!-- ============ Tweaks panel ============ -->
+<div class="tweaks" id="tweaks">
+  <h3>Tweaks <span class="cx" id="closeTweaks">×</span></h3>
+  <div class="tweak-row">
+    <span>Tema claro</span>
+    <div class="tgl" id="tkTheme"></div>
+  </div>
+  <div class="tweak-row">
+    <span>Toolbar vertical</span>
+    <div class="tgl on" id="tkToolV"></div>
+  </div>
+  <div class="tweak-row">
+    <span>Panel izquierdo</span>
+    <div class="tgl on" id="tkLeft"></div>
+  </div>
+  <div class="tweak-row">
+    <span>Toolbar de formato</span>
+    <div class="tgl on" id="tkToolH"></div>
+  </div>
+  <div class="tweak-row">
+    <span>Barra de estado</span>
+    <div class="tgl on" id="tkStatus"></div>
+  </div>
+</div>
+
+<script>
+/*EDITMODE-BEGIN*/
+const TWEAK_DEFAULTS = {
+  "lightTheme": false,
+  "showToolV": true,
+  "showLeft": true,
+  "showToolH": true,
+  "showStatus": true
+};
+/*EDITMODE-END*/
+
+const state = { ...TWEAK_DEFAULTS };
+
+// ---- Draw ruler ticks dynamically ----
+function drawRulers() {
+  const wrap = document.getElementById('canvasWrap');
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  const th = document.getElementById('ticksH');
+  const tv = document.getElementById('ticksV');
+  if (!th || !tv) return;
+  th.innerHTML = '';
+  tv.innerHTML = '';
+  // horizontal ticks every 20px
+  for (let x = 0; x < w; x += 20) {
+    const tall = x % 100 === 0;
+    const y1 = tall ? 6 : 12;
+    th.insertAdjacentHTML('beforeend', `<line x1="${x}" y1="${y1}" x2="${x}" y2="20" stroke="#7d7d82" />`);
+    if (tall && x > 0) {
+      th.insertAdjacentHTML('beforeend', `<text x="${x + 3}" y="12" fill="#7d7d82" font-family="JetBrains Mono" font-size="9">${x}</text>`);
+    }
+  }
+  for (let y = 0; y < h; y += 20) {
+    const tall = y % 100 === 0;
+    const x1 = tall ? 6 : 12;
+    tv.insertAdjacentHTML('beforeend', `<line x1="${x1}" y1="${y}" x2="20" y2="${y}" stroke="#7d7d82" />`);
+    if (tall && y > 0) {
+      tv.insertAdjacentHTML('beforeend', `<text x="3" y="${y + 10}" fill="#7d7d82" font-family="JetBrains Mono" font-size="9">${y}</text>`);
+    }
+  }
+}
+drawRulers();
+window.addEventListener('resize', drawRulers);
+
+// ---- Tree chevrons toggle (cosmetic) ----
+document.querySelectorAll('.node .chev').forEach(c => {
+  if (c.classList.contains('leaf')) return;
+  c.addEventListener('click', (e) => {
+    e.stopPropagation();
+    c.classList.toggle('open');
+  });
+});
+document.querySelectorAll('.node').forEach(n => {
+  n.addEventListener('click', () => {
+    document.querySelectorAll('.node').forEach(x => x.classList.remove('sel', 'active'));
+    n.classList.add('sel', 'active');
+  });
+});
+
+// ---- Props tabs ----
+document.querySelectorAll('.props-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.props-tab').forEach(x => x.classList.remove('on'));
+    t.classList.add('on');
+  });
+});
+
+// ---- Vertical tool selection ----
+document.querySelectorAll('.vt-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.vt-btn').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+  });
+});
+
+// ---- Tweaks ----
+const tweaks = document.getElementById('tweaks');
+document.getElementById('closeTweaks').addEventListener('click', () => tweaks.classList.remove('on'));
+
+function applyTheme() {
+  if (state.lightTheme) {
+    document.documentElement.style.setProperty('--bg-0', '#eeede8');
+    document.documentElement.style.setProperty('--bg-1', '#f5f4ef');
+    document.documentElement.style.setProperty('--bg-2', '#eceae4');
+    document.documentElement.style.setProperty('--bg-3', '#e2dfd7');
+    document.documentElement.style.setProperty('--bg-4', '#d6d3ca');
+    document.documentElement.style.setProperty('--canvas', '#d9d7cf');
+    document.documentElement.style.setProperty('--line', '#bab8b1');
+    document.documentElement.style.setProperty('--line-2', '#c9c6be');
+    document.documentElement.style.setProperty('--line-3', '#a8a59c');
+    document.documentElement.style.setProperty('--ink', '#1a1a1a');
+    document.documentElement.style.setProperty('--ink-2', '#4a4a4a');
+    document.documentElement.style.setProperty('--muted', '#7a7a78');
+  } else {
+    ['--bg-0','--bg-1','--bg-2','--bg-3','--bg-4','--canvas','--line','--line-2','--line-3','--ink','--ink-2','--muted'].forEach(k => document.documentElement.style.removeProperty(k));
+  }
+  document.getElementById('tkTheme').classList.toggle('on', state.lightTheme);
+}
+function apply() {
+  document.querySelector('.toolbar-v').style.display = state.showToolV ? '' : 'none';
+  document.querySelector('.leftpanel').style.display = state.showLeft ? '' : 'none';
+  document.querySelector('.toolbar-h').style.display = state.showToolH ? '' : 'none';
+  document.querySelector('.statusbar').style.display = state.showStatus ? '' : 'none';
+
+  // Rebuild grid columns/rows
+  const app = document.querySelector('.app');
+  let cols = [];
+  if (state.showToolV) cols.push('44px');
+  if (state.showLeft) cols.push('240px');
+  cols.push('1fr');
+  app.style.gridTemplateColumns = cols.join(' ');
+
+  let rows = ['30px']; // title
+  rows.push('34px'); // menu
+  if (state.showToolH) rows.push('38px'); else rows.push('0px');
+  rows.push('1fr');
+  if (state.showStatus) rows.push('24px'); else rows.push('0px');
+  app.style.gridTemplateRows = rows.join(' ');
+
+  // Adjust grid placement
+  const tv = document.querySelector('.toolbar-v');
+  const lp = document.querySelector('.leftpanel');
+  const cw = document.querySelector('.canvas-wrap');
+
+  // column indexes
+  let colIdx = 1;
+  if (state.showToolV) { tv.style.gridColumn = colIdx; colIdx++; } 
+  if (state.showLeft) { lp.style.gridColumn = colIdx; colIdx++; }
+  cw.style.gridColumn = colIdx;
+
+  // row (canvas row shifts based on toolbar-h visibility)
+  const canvasRow = state.showToolH ? 4 : 3;
+  tv.style.gridRow = canvasRow;
+  lp.style.gridRow = canvasRow;
+  cw.style.gridRow = canvasRow;
+
+  document.getElementById('tkToolV').classList.toggle('on', state.showToolV);
+  document.getElementById('tkLeft').classList.toggle('on', state.showLeft);
+  document.getElementById('tkToolH').classList.toggle('on', state.showToolH);
+  document.getElementById('tkStatus').classList.toggle('on', state.showStatus);
+
+  setTimeout(drawRulers, 50);
+}
+function persist() {
+  try { window.parent.postMessage({type:'__edit_mode_set_keys', edits: state}, '*'); } catch(e){}
+}
+
+document.getElementById('tkTheme').addEventListener('click', () => { state.lightTheme = !state.lightTheme; applyTheme(); persist(); });
+document.getElementById('tkToolV').addEventListener('click', () => { state.showToolV = !state.showToolV; apply(); persist(); });
+document.getElementById('tkLeft').addEventListener('click', () => { state.showLeft = !state.showLeft; apply(); persist(); });
+document.getElementById('tkToolH').addEventListener('click', () => { state.showToolH = !state.showToolH; apply(); persist(); });
+document.getElementById('tkStatus').addEventListener('click', () => { state.showStatus = !state.showStatus; apply(); persist(); });
+
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (!d || !d.type) return;
+  if (d.type === '__activate_edit_mode') tweaks.classList.add('on');
+  else if (d.type === '__deactivate_edit_mode') tweaks.classList.remove('on');
+});
+try { window.parent.postMessage({type:'__edit_mode_available'}, '*'); } catch(e){}
+
+applyTheme();
+apply();
+</script>
+</body>
+</html>
