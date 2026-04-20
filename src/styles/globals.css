@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg-0);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 12px;
+  user-select: none;
+  overflow: hidden;
+}
+
+.mono,
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- scrollbar --- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-4);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-3);
+}
+
+/* --- utilities used across the app --- */
+.hairline {
+  background: var(--line);
+}
+.hairline-2 {
+  background: var(--line-2);
+}
+
+/* minimal button reset (Tailwind base already neutralizes most) */
+button {
+  cursor: default;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+button:focus-visible {
+  outline: 1.5px solid var(--sel);
+  outline-offset: 1px;
+}
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Konva container wrapper */
+.konvajs-content {
+  background: transparent;
+}
