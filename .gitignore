@@ -1,0 +1,38 @@
+# deps
+node_modules
+.pnpm-debug.log*
+yarn-error.log*
+npm-debug.log*
+pnpm-lock.yaml
+
+# build
+dist
+dist-ssr
+*.local
+
+# editors
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# env
+.env
+.env.*.local
+!.env.example
+
+# coverage
+coverage
+.nyc_output
+
+# cache
+.cache
+.eslintcache
+.parcel-cache
+.turbo
+.vite
