@@ -1,9 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Layer, Stage } from 'react-konva';
 import type Konva from 'konva';
 import Sheet from './Sheet';
 import Rulers, { RULER_SIZE_PX } from './Rulers';
 import ElementsLayer from './ElementsLayer';
+import DraftOverlay from './DraftOverlay';
+import { useCanvasDraw } from './useCanvasDraw';
 import { useDocumentStore } from '@/store/documentStore';
 import { useUIStore } from '@/store/uiStore';
 import { useToolStore } from '@/store/toolStore';
@@ -29,6 +31,20 @@ export default function Canvas() {
   const [spaceDown, setSpaceDown] = useState(false);
   const panningRef = useRef(false);
   const panStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+
+  // siguiente zIndex a asignar a un nuevo elemento
+  const nextZIndex = useMemo(
+    () => () => (page ? Math.max(0, ...page.elements.map((e) => e.zIndex)) + 1 : 0),
+    [page],
+  );
+
+  const draw = useCanvasDraw({
+    offsetX: offset.x,
+    offsetY: offset.y,
+    zoom,
+    pageId: page?.id ?? '',
+    nextZIndex,
+  });
 
   useLayoutEffect(() => {
     if (!containerRef.current) return;
@@ -62,6 +78,8 @@ export default function Canvas() {
         fitToViewport();
       } else if (e.key === '1') {
         setZoom(1);
+      } else if (e.key === 'Escape') {
+        draw.cancel();
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -74,7 +92,7 @@ export default function Canvas() {
       window.removeEventListener('keyup', onKeyUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setZoom]);
+  }, [setZoom, draw.cancel]);
 
   function fitToViewport() {
     if (!page) return;
@@ -129,11 +147,16 @@ export default function Canvas() {
   const isHand = activeTool === 'hand' || spaceDown;
 
   function onMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
-    // si el click llegó al Stage (no a un elemento) y la tool es select → limpiar selección
     const isOnStage = e.target === e.target.getStage();
-    if (!isHand && activeTool === 'select' && isOnStage) clearSelection();
 
-    if (!isHand) return;
+    if (!isHand) {
+      // herramientas de dibujo: iniciar draft y salir
+      if (draw.onMouseDown(e)) return;
+      // select sobre área vacía → limpiar selección
+      if (activeTool === 'select' && isOnStage) clearSelection();
+      return;
+    }
+
     panningRef.current = true;
     panStart.current = {
       x: e.evt.clientX,
@@ -150,6 +173,8 @@ export default function Canvas() {
       });
       return;
     }
+    // si estamos dibujando, actualizar draft
+    draw.onMouseMove(e);
     const stage = stageRef.current;
     if (!stage) return;
     const p = stage.getPointerPosition();
@@ -158,6 +183,7 @@ export default function Canvas() {
   }
   function onMouseUp() {
     panningRef.current = false;
+    draw.onMouseUp();
   }
 
   const cursor = isHand
@@ -189,6 +215,14 @@ export default function Canvas() {
           {page && (
             <ElementsLayer
               page={page}
+              zoom={zoom}
+              offsetX={offset.x}
+              offsetY={offset.y}
+            />
+          )}
+          {draw.draft && (
+            <DraftOverlay
+              draft={draw.draft}
               zoom={zoom}
               offsetX={offset.x}
               offsetY={offset.y}
