@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useDocumentStore } from '@/store/documentStore';
+import { sizeLabel } from '@/utils/pageSizes';
 
 function Sep() {
   return <div className="w-px h-3.5 bg-line-2 mx-2" />;
@@ -31,6 +32,8 @@ export default function StatusBar() {
   const idx = Math.max(0, pages.findIndex((p) => p.id === currentPageId));
   const page = pages[idx] ?? pages[0];
   const lastSaved = useDocumentStore((s) => s.lastSavedAt);
+
+  const label = page ? sizeLabel(page.size.width, page.size.height) : '—';
 
   return (
     <div className="h-full bg-bg-1 flex items-center text-11 px-2">
@@ -116,7 +119,7 @@ export default function StatusBar() {
       <div className="flex-1" />
 
       <span className="font-mono text-muted mr-2">
-        A4 · {page?.size.width}×{page?.size.height}mm
+        {label} · {page?.size.width.toFixed(1)}×{page?.size.height.toFixed(1)}mm
       </span>
       <Sep />
       <Circle size={8} style={{ color: 'var(--accent)', fill: 'var(--accent)' }} />

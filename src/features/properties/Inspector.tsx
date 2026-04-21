@@ -1,17 +1,31 @@
+import PageSizePicker from '@/features/pages/PageSizePicker';
+import { useDocumentStore } from '@/store/documentStore';
+import { useSelectionStore } from '@/store/selectionStore';
+
 /**
- * Stub del Inspector de propiedades. Se completará con tabs y fields en
- * el siguiente commit (Posición, General, Guías, Heads).
+ * Inspector contextual: si no hay selección muestra propiedades de la
+ * página actual (incluyendo PageSizePicker); si hay selección muestra
+ * placeholders para los tabs Posición/General/Guías/Heads.
  */
 export default function Inspector() {
+  const pages = useDocumentStore((s) => s.doc.pages);
+  const currentPageId = useDocumentStore((s) => s.currentPageId);
+  const page = pages.find((p) => p.id === currentPageId) ?? pages[0];
+  const selectedIds = useSelectionStore((s) => s.selectedIds);
+
+  const hasSelection = selectedIds.length > 0;
+
   return (
-    <div className="p-3 text-11 text-muted">
+    <div className="p-3 text-11">
       <div className="flex items-center gap-1.5 mb-2">
-        <span
-          className="w-1.5 h-1.5 rounded-full"
-          style={{ background: 'var(--accent)' }}
-        />
-        <span className="text-ink">Page 1 — Page</span>
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent)' }} />
+        <span className="text-ink">
+          {hasSelection
+            ? `${selectedIds.length} elemento(s) seleccionado(s)`
+            : `${page?.name ?? 'Page'} — Page`}
+        </span>
       </div>
+
       <div className="border-b border-line-2 flex gap-4 mb-3">
         {['Posición', 'General', 'Guías', 'Heads'].map((t, i) => (
           <button
@@ -28,7 +42,25 @@ export default function Inspector() {
           </button>
         ))}
       </div>
-      <div className="text-ink-2">Selecciona un elemento para ver sus propiedades.</div>
+
+      {!hasSelection && page && (
+        <div className="flex flex-col gap-3">
+          <SectionTitle>Tamaño de hoja</SectionTitle>
+          <PageSizePicker />
+        </div>
+      )}
+
+      {hasSelection && (
+        <div className="text-ink-2">Propiedades del elemento — TODO siguiente commit.</div>
+      )}
+    </div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[10px] uppercase tracking-wider text-muted border-b border-line-2 pb-1">
+      {children}
     </div>
   );
 }
