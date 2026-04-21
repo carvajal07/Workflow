@@ -6,6 +6,7 @@ import TextElement from './elements/TextElement';
 import DataFieldElement from './elements/DataFieldElement';
 import ImageElement from './elements/ImageElement';
 import QrElement from './elements/QrElement';
+import TableElement from './elements/TableElement';
 import type { ElementModel, Page } from '@/types/document';
 import { useDocumentStore } from '@/store/documentStore';
 import { useSelectionStore } from '@/store/selectionStore';
@@ -130,7 +131,18 @@ function renderElement(
           draggable={draggable}
         />
       );
+    case 'table':
+      return (
+        <TableElement
+          key={key}
+          el={el}
+          zoom={zoom}
+          onSelect={onSelect}
+          onChange={(p) => onUpdate(el.id, p)}
+          draggable={draggable}
+        />
+      );
     default:
-      return null; // table → próximo commit
+      return null;
   }
 }
