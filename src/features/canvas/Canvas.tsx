@@ -3,22 +3,13 @@ import { Layer, Stage } from 'react-konva';
 import type Konva from 'konva';
 import Sheet from './Sheet';
 import Rulers, { RULER_SIZE_PX } from './Rulers';
+import ElementsLayer from './ElementsLayer';
 import { useDocumentStore } from '@/store/documentStore';
 import { useUIStore } from '@/store/uiStore';
 import { useToolStore } from '@/store/toolStore';
+import { useSelectionStore } from '@/store/selectionStore';
 import { MM_TO_PX, pxToMm } from '@/utils/units';
 
-/**
- * Canvas principal con Konva.
- *
- * Responsabilidades:
- *  - Dibuja la hoja (Sheet) centrada por defecto con un offset panable.
- *  - Dibuja reglas H/V en mm.
- *  - Convierte y emite las coordenadas del cursor a uiStore (en mm, relativo al origen de la hoja).
- *  - Maneja zoom con Ctrl/Cmd + rueda (centrado en el pointer, 0.1 a 5x).
- *  - Maneja pan con Espacio + drag o con la herramienta 'hand'.
- *  - Atajos: 0 = fit, 1 = 100 %.
- */
 export default function Canvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -28,6 +19,7 @@ export default function Canvas() {
   const setZoom = useUIStore((s) => s.setZoom);
   const setCursor = useUIStore((s) => s.setCursor);
   const activeTool = useToolStore((s) => s.active);
+  const clearSelection = useSelectionStore((s) => s.clear);
 
   const pages = useDocumentStore((s) => s.doc.pages);
   const currentPageId = useDocumentStore((s) => s.currentPageId);
@@ -38,7 +30,6 @@ export default function Canvas() {
   const panningRef = useRef(false);
   const panStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
 
-  // --- medir contenedor ---
   useLayoutEffect(() => {
     if (!containerRef.current) return;
     const el = containerRef.current;
@@ -50,7 +41,6 @@ export default function Canvas() {
     return () => ro.disconnect();
   }, []);
 
-  // --- centrar la hoja al montar o cambiar de página / zoom inicial ---
   useEffect(() => {
     if (!page) return;
     const sheetW = page.size.width * MM_TO_PX * zoom;
@@ -61,10 +51,8 @@ export default function Canvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page?.id, size.w, size.h]);
 
-  // --- atajos de teclado: espacio (pan), 0 (fit), 1 (100 %) ---
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // no interferir con inputs
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (e.code === 'Space') {
@@ -106,11 +94,9 @@ export default function Canvas() {
     });
   }
 
-  // --- zoom con rueda (Ctrl/Cmd) centrado en pointer ---
   function onWheel(e: Konva.KonvaEventObject<WheelEvent>) {
     const native = e.evt;
     if (!(native.ctrlKey || native.metaKey)) {
-      // pan con rueda (scroll normal)
       native.preventDefault();
       setOffset((o) => ({ x: o.x - native.deltaX, y: o.y - native.deltaY }));
       return;
@@ -132,7 +118,6 @@ export default function Canvas() {
       setZoom(nextZoom);
       return;
     }
-    // mantener el punto bajo el cursor
     const mx = (pointer.x - offset.x) / zoom;
     const my = (pointer.y - offset.y) / zoom;
     const nx = pointer.x - mx * nextZoom;
@@ -141,10 +126,13 @@ export default function Canvas() {
     setOffset({ x: nx, y: ny });
   }
 
-  // --- pan: espacio + drag ó herramienta 'hand' ---
   const isHand = activeTool === 'hand' || spaceDown;
 
   function onMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
+    // si el click llegó al Stage (no a un elemento) y la tool es select → limpiar selección
+    const isOnStage = e.target === e.target.getStage();
+    if (!isHand && activeTool === 'select' && isOnStage) clearSelection();
+
     if (!isHand) return;
     panningRef.current = true;
     panStart.current = {
@@ -162,14 +150,11 @@ export default function Canvas() {
       });
       return;
     }
-    // actualizar coords del cursor en mm
     const stage = stageRef.current;
     if (!stage) return;
     const p = stage.getPointerPosition();
     if (!p) return;
-    const mmX = pxToMm(p.x - offset.x, zoom);
-    const mmY = pxToMm(p.y - offset.y, zoom);
-    setCursor(mmX, mmY);
+    setCursor(pxToMm(p.x - offset.x, zoom), pxToMm(p.y - offset.y, zoom));
   }
   function onMouseUp() {
     panningRef.current = false;
@@ -199,12 +184,18 @@ export default function Canvas() {
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
       >
-        {/* Hoja + elementos (futuros) */}
         <Layer>
           {page && <Sheet page={page} zoom={zoom} offsetX={offset.x} offsetY={offset.y} />}
+          {page && (
+            <ElementsLayer
+              page={page}
+              zoom={zoom}
+              offsetX={offset.x}
+              offsetY={offset.y}
+            />
+          )}
         </Layer>
 
-        {/* Reglas (capa fija encima) */}
         <Layer listening={false}>
           <Rulers
             viewportWidth={size.w}
