@@ -45,6 +45,24 @@ export default function LineLikeElement<T extends LineEl | PenEl>({
         const node = e.target;
         onChange({ x: node.x() / s, y: node.y() / s } as Partial<T>);
       }}
+      onTransformEnd={(e) => {
+        const node = e.target as Konva.Line;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        const scaled = el.points.map((v, i) => v * (i % 2 === 0 ? scaleX : scaleY));
+        const xs = scaled.filter((_, i) => i % 2 === 0);
+        const ys = scaled.filter((_, i) => i % 2 === 1);
+        onChange({
+          x: node.x() / s,
+          y: node.y() / s,
+          points: scaled,
+          width: Math.max(0.5, Math.max(...xs) - Math.min(...xs)),
+          height: Math.max(0.5, Math.max(...ys) - Math.min(...ys)),
+          rotation: node.rotation(),
+        } as Partial<T>);
+      }}
     />
   );
 }
