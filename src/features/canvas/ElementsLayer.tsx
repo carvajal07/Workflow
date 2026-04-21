@@ -1,0 +1,88 @@
+import { Group } from 'react-konva';
+import RectElement from './elements/RectElement';
+import CircleElement from './elements/CircleElement';
+import LineLikeElement from './elements/LineLikeElement';
+import type { ElementModel, Page } from '@/types/document';
+import { useDocumentStore } from '@/store/documentStore';
+import { useSelectionStore } from '@/store/selectionStore';
+import { useToolStore } from '@/store/toolStore';
+
+interface Props {
+  page: Page;
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+/**
+ * Capa de elementos posicionada en el offset de la hoja.
+ * Los elementos guardan sus coordenadas en mm (modelo), aquí se convierten a px.
+ */
+export default function ElementsLayer({ page, zoom, offsetX, offsetY }: Props) {
+  const updateElement = useDocumentStore((s) => s.updateElement);
+  const select = useSelectionStore((s) => s.select);
+  const toggle = useSelectionStore((s) => s.toggle);
+  const activeTool = useToolStore((s) => s.active);
+  const draggable = activeTool === 'select';
+
+  function handleSelect(id: string, additive: boolean) {
+    if (additive) toggle(id);
+    else select([id]);
+  }
+
+  const elements = [...page.elements].sort((a, b) => a.zIndex - b.zIndex);
+
+  return (
+    <Group x={offsetX} y={offsetY}>
+      {elements.map((el) => renderElement(el, zoom, handleSelect, updateElement, draggable))}
+    </Group>
+  );
+}
+
+function renderElement(
+  el: ElementModel,
+  zoom: number,
+  onSelect: (id: string, additive: boolean) => void,
+  onUpdate: (id: string, patch: Partial<ElementModel>) => void,
+  draggable: boolean,
+) {
+  const key = el.id;
+  switch (el.type) {
+    case 'rect':
+      return (
+        <RectElement
+          key={key}
+          el={el}
+          zoom={zoom}
+          onSelect={onSelect}
+          onChange={(p) => onUpdate(el.id, p)}
+          draggable={draggable}
+        />
+      );
+    case 'circle':
+      return (
+        <CircleElement
+          key={key}
+          el={el}
+          zoom={zoom}
+          onSelect={onSelect}
+          onChange={(p) => onUpdate(el.id, p)}
+          draggable={draggable}
+        />
+      );
+    case 'line':
+    case 'pen':
+      return (
+        <LineLikeElement
+          key={key}
+          el={el}
+          zoom={zoom}
+          onSelect={onSelect}
+          onChange={(p) => onUpdate(el.id, p)}
+          draggable={draggable}
+        />
+      );
+    default:
+      return null; // text / image / qr / table / dataField → siguiente commit
+  }
+}
