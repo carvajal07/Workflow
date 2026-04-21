@@ -36,6 +36,20 @@ export default function DataFieldElement({ el, zoom, onSelect, onChange, draggab
         const node = e.target;
         onChange({ x: node.x() / s, y: node.y() / s });
       }}
+      onTransformEnd={(e) => {
+        const node = e.target as Konva.Group;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({
+          x: node.x() / s,
+          y: node.y() / s,
+          width: Math.max(1, el.width * scaleX),
+          height: Math.max(1, el.height * scaleY),
+          rotation: node.rotation(),
+        });
+      }}
     >
       <Rect
         x={0}

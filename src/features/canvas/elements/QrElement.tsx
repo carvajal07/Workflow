@@ -50,11 +50,6 @@ export default function QrElement({ el, zoom, onSelect, onChange, draggable }: P
 
   const { image } = useHtmlImage(dataUrl);
 
-  const onDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    const node = e.target;
-    onChange({ x: node.x() / s, y: node.y() / s });
-  };
-
   return (
     <Group
       id={el.id}
@@ -65,7 +60,27 @@ export default function QrElement({ el, zoom, onSelect, onChange, draggable }: P
       visible={el.visible}
       draggable={draggable && !el.locked}
       onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey)}
-      onDragEnd={onDragEnd}
+      onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
+        const node = e.target;
+        onChange({ x: node.x() / s, y: node.y() / s });
+      }}
+      onTransformEnd={(e) => {
+        const node = e.target as Konva.Group;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        // QR se mantiene cuadrado: usar la escala más pequeña
+        const scale = Math.min(scaleX, scaleY);
+        const size = Math.max(1, Math.min(el.width, el.height) * scale);
+        onChange({
+          x: node.x() / s,
+          y: node.y() / s,
+          width: size,
+          height: size,
+          rotation: node.rotation(),
+        });
+      }}
     >
       {image ? (
         <KImage image={image} width={side} height={side} />

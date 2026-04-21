@@ -52,6 +52,20 @@ export default function TableElement({ el, zoom, onSelect, onChange, draggable }
         const node = e.target;
         onChange({ x: node.x() / s, y: node.y() / s });
       }}
+      onTransformEnd={(e) => {
+        const node = e.target as Konva.Group;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({
+          x: node.x() / s,
+          y: node.y() / s,
+          width: Math.max(5, el.width * scaleX),
+          height: Math.max(5, el.height * scaleY),
+          rotation: node.rotation(),
+        });
+      }}
     >
       {/* Borde exterior */}
       <Rect
