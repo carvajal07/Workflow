@@ -2,6 +2,8 @@ import { Group } from 'react-konva';
 import RectElement from './elements/RectElement';
 import CircleElement from './elements/CircleElement';
 import LineLikeElement from './elements/LineLikeElement';
+import TextElement from './elements/TextElement';
+import DataFieldElement from './elements/DataFieldElement';
 import type { ElementModel, Page } from '@/types/document';
 import { useDocumentStore } from '@/store/documentStore';
 import { useSelectionStore } from '@/store/selectionStore';
@@ -82,7 +84,29 @@ function renderElement(
           draggable={draggable}
         />
       );
+    case 'text':
+      return (
+        <TextElement
+          key={key}
+          el={el}
+          zoom={zoom}
+          onSelect={onSelect}
+          onChange={(p) => onUpdate(el.id, p)}
+          draggable={draggable}
+        />
+      );
+    case 'dataField':
+      return (
+        <DataFieldElement
+          key={key}
+          el={el}
+          zoom={zoom}
+          onSelect={onSelect}
+          onChange={(p) => onUpdate(el.id, p)}
+          draggable={draggable}
+        />
+      );
     default:
-      return null; // text / image / qr / table / dataField → siguiente commit
+      return null; // image / qr / table → siguientes commits
   }
 }
