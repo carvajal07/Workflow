@@ -4,11 +4,15 @@ node_modules
 yarn-error.log*
 npm-debug.log*
 pnpm-lock.yaml
+package-lock.json
 
 # build
 dist
 dist-ssr
 *.local
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
 
 # editors
 .vscode/*
