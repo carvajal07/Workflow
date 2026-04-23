@@ -5,6 +5,7 @@ import Sheet from './Sheet';
 import Rulers, { RULER_SIZE_PX } from './Rulers';
 import ElementsLayer from './ElementsLayer';
 import DraftOverlay from './DraftOverlay';
+import SelectionTransformer from './SelectionTransformer';
 import { useCanvasDraw } from './useCanvasDraw';
 import { useDocumentStore } from '@/store/documentStore';
 import { useUIStore } from '@/store/uiStore';
@@ -228,6 +229,7 @@ export default function Canvas() {
               offsetY={offset.y}
             />
           )}
+          <SelectionTransformer stageRef={stageRef} />
         </Layer>
 
         <Layer listening={false}>
