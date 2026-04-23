@@ -5,88 +5,114 @@ interface Props {
   viewportWidth: number;
   /** Alto del viewport del canvas (px). */
   viewportHeight: number;
-  /** Offset del "origen" (0,0) de la hoja en el viewport. */
+  /** Stage-coord X donde está el 0 mm (borde izquierdo de la hoja). */
   originX: number;
+  /** Stage-coord Y donde está el 0 mm (borde superior de la hoja). */
   originY: number;
-  /** Zoom actual, para ajustar la densidad de ticks. */
-  zoom: number;
+  /** Pixels por milímetro aplicando el zoom actual. */
+  pxPerMm: number;
 }
 
 const RULER_SIZE = 20;
 const TICK_COLOR = '#7d7d82';
+const LABEL_COLOR = '#9a9aa0';
 const BG = '#26262a';
+const BORDER = '#1a1a1c';
+
+/** px objetivo entre dos labels — determina la granularidad del step. */
+const TARGET_LABEL_PX = 80;
+/** Pasos (mm) entre labels permitidos — "nice numbers". */
+const STEPS_MM = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];
+
+function niceLabelEveryMm(pxPerMm: number): number {
+  for (const s of STEPS_MM) if (s * pxPerMm >= TARGET_LABEL_PX) return s;
+  return STEPS_MM[STEPS_MM.length - 1];
+}
 
 /**
- * Reglas horizontal y vertical en mm (visualizadas en px).
- * Se dibujan ticks cada 20px y labels cada 100px, como especifica el README.
+ * Reglas horizontal y vertical en mm. El 0 queda alineado con la
+ * esquina superior-izquierda de la hoja (passed como originX/originY).
+ * El intervalo entre labels se adapta al zoom: 1, 2, 5, 10, 20, 50,
+ * 100, 200, 500, 1000, 2000 mm.
  */
 export default function Rulers({
   viewportWidth,
   viewportHeight,
   originX,
   originY,
-  zoom,
+  pxPerMm,
 }: Props) {
-  const tickEvery = 20;
-  const labelEvery = 100;
-  const stepPx = Math.max(5, tickEvery * zoom);
+  const labelEvery = niceLabelEveryMm(pxPerMm);
+  const tickEvery = labelEvery / 10;
+  const halfEvery = labelEvery / 2;
+  const EPS = 1e-6;
 
-  // ticks horizontal (eje X)
+  // --- horizontal ---
   const hTicks: JSX.Element[] = [];
-  for (let x = 0; x < viewportWidth; x += stepPx) {
-    const px = (x + (originX % stepPx)) | 0;
-    const isLabel = Math.round((px - originX) / zoom) % labelEvery === 0;
+  const startMmH = Math.floor((RULER_SIZE - originX) / pxPerMm / tickEvery) * tickEvery;
+  const endMmH = (viewportWidth - originX) / pxPerMm;
+  for (let i = 0; startMmH + i * tickEvery <= endMmH; i++) {
+    const mm = startMmH + i * tickEvery;
+    const stageX = originX + mm * pxPerMm;
+    if (stageX < RULER_SIZE || stageX > viewportWidth) continue;
+    const isLabel = Math.abs(mm) % labelEvery < EPS;
+    const isHalf = !isLabel && Math.abs(mm) % halfEvery < EPS;
+    const yTop = isLabel ? 6 : isHalf ? 10 : 14;
     hTicks.push(
       <Line
-        key={`h-${x}`}
-        points={[px, isLabel ? 6 : 12, px, RULER_SIZE]}
+        key={`h-${i}`}
+        points={[stageX, yTop, stageX, RULER_SIZE]}
         stroke={TICK_COLOR}
         strokeWidth={1}
         listening={false}
       />,
     );
     if (isLabel) {
-      const labelValue = Math.round((px - originX) / zoom);
       hTicks.push(
         <Text
-          key={`hl-${x}`}
-          x={px + 2}
+          key={`hl-${i}`}
+          x={stageX + 2}
           y={2}
-          text={String(labelValue)}
+          text={formatMm(mm)}
           fontSize={9}
           fontFamily="JetBrains Mono, monospace"
-          fill={TICK_COLOR}
+          fill={LABEL_COLOR}
           listening={false}
         />,
       );
     }
   }
 
-  // ticks vertical (eje Y)
+  // --- vertical ---
   const vTicks: JSX.Element[] = [];
-  for (let y = 0; y < viewportHeight; y += stepPx) {
-    const py = (y + (originY % stepPx)) | 0;
-    const isLabel = Math.round((py - originY) / zoom) % labelEvery === 0;
+  const startMmV = Math.floor((RULER_SIZE - originY) / pxPerMm / tickEvery) * tickEvery;
+  const endMmV = (viewportHeight - originY) / pxPerMm;
+  for (let i = 0; startMmV + i * tickEvery <= endMmV; i++) {
+    const mm = startMmV + i * tickEvery;
+    const stageY = originY + mm * pxPerMm;
+    if (stageY < RULER_SIZE || stageY > viewportHeight) continue;
+    const isLabel = Math.abs(mm) % labelEvery < EPS;
+    const isHalf = !isLabel && Math.abs(mm) % halfEvery < EPS;
+    const xLeft = isLabel ? 6 : isHalf ? 10 : 14;
     vTicks.push(
       <Line
-        key={`v-${y}`}
-        points={[isLabel ? 6 : 12, py, RULER_SIZE, py]}
+        key={`v-${i}`}
+        points={[xLeft, stageY, RULER_SIZE, stageY]}
         stroke={TICK_COLOR}
         strokeWidth={1}
         listening={false}
       />,
     );
     if (isLabel) {
-      const labelValue = Math.round((py - originY) / zoom);
       vTicks.push(
         <Text
-          key={`vl-${y}`}
+          key={`vl-${i}`}
           x={2}
-          y={py + 2}
-          text={String(labelValue)}
+          y={stageY + 2}
+          text={formatMm(mm)}
           fontSize={9}
           fontFamily="JetBrains Mono, monospace"
-          fill={TICK_COLOR}
+          fill={LABEL_COLOR}
           listening={false}
         />,
       );
@@ -95,31 +121,32 @@ export default function Rulers({
 
   return (
     <Group listening={false}>
-      {/* esquina */}
+      {/* fondo horizontal + vertical (se solapan en la esquina, da igual) */}
+      <Rect x={0} y={0} width={viewportWidth} height={RULER_SIZE} fill={BG} />
+      <Rect x={0} y={0} width={RULER_SIZE} height={viewportHeight} fill={BG} />
+      {hTicks}
+      {vTicks}
+      {/* tapa la esquina para que los ticks verticales no pisen el ruler horizontal */}
       <Rect x={0} y={0} width={RULER_SIZE} height={RULER_SIZE} fill={BG} />
-      {/* ruler horizontal */}
-      <Rect x={RULER_SIZE} y={0} width={viewportWidth - RULER_SIZE} height={RULER_SIZE} fill={BG} />
-      <Group x={RULER_SIZE} y={0}>
-        {hTicks}
-      </Group>
-      {/* ruler vertical */}
-      <Rect x={0} y={RULER_SIZE} width={RULER_SIZE} height={viewportHeight - RULER_SIZE} fill={BG} />
-      <Group x={0} y={RULER_SIZE}>
-        {vTicks}
-      </Group>
       {/* bordes */}
       <Line
         points={[0, RULER_SIZE + 0.5, viewportWidth, RULER_SIZE + 0.5]}
-        stroke="#1a1a1c"
+        stroke={BORDER}
         strokeWidth={1}
       />
       <Line
         points={[RULER_SIZE + 0.5, 0, RULER_SIZE + 0.5, viewportHeight]}
-        stroke="#1a1a1c"
+        stroke={BORDER}
         strokeWidth={1}
       />
     </Group>
   );
+}
+
+function formatMm(v: number): string {
+  // sub-mm y mm con decimal → 1 decimal. Enteros → sin decimales.
+  if (!Number.isInteger(v)) return v.toFixed(1);
+  return String(v);
 }
 
 export const RULER_SIZE_PX = RULER_SIZE;
