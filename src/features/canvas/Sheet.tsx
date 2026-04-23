@@ -39,6 +39,7 @@ export default function Sheet({ page, zoom, offsetX, offsetY }: Props) {
         fill={page.background || '#fbfbf8'}
         stroke="rgba(0,0,0,0.4)"
         strokeWidth={1}
+        listening={false}
       />
     </Group>
   );
