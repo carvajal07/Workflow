@@ -238,7 +238,7 @@ export default function Canvas() {
             viewportHeight={size.h}
             originX={offset.x}
             originY={offset.y}
-            zoom={zoom * MM_TO_PX}
+            pxPerMm={zoom * MM_TO_PX}
           />
         </Layer>
       </Stage>
