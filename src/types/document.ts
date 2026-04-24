@@ -34,7 +34,7 @@ export interface TextEl extends BaseEl {
   fontStyle: 'normal' | 'italic';
   fontWeight: number;
   textDecoration?: 'underline' | 'line-through';
-  align: 'left' | 'center' | 'right' | 'justify';
+  align: 'left' | 'center' | 'right' | 'justify-left' | 'justify-center' | 'justify-right' | 'justify-block';
   lineHeight: number;
   color: string;
 }
