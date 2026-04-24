@@ -11,9 +11,10 @@ import type {
   LineEl,
   PenEl,
   RectEl,
+  TextEl,
 } from '@/types/document';
 
-export type DrawTool = 'rect' | 'circle' | 'line' | 'pen';
+export type DrawTool = 'rect' | 'circle' | 'line' | 'pen' | 'text';
 
 export interface Draft {
   tool: DrawTool;
@@ -26,7 +27,7 @@ export interface Draft {
 }
 
 export function isDrawTool(t: Tool): t is DrawTool {
-  return t === 'rect' || t === 'circle' || t === 'line' || t === 'pen';
+  return t === 'rect' || t === 'circle' || t === 'line' || t === 'pen' || t === 'text';
 }
 
 interface Args {
@@ -48,6 +49,7 @@ export function useCanvasDraw({ offsetX, offsetY, zoom, pageId, nextZIndex }: Ar
   const setTool = useToolStore((s) => s.setActive);
   const autoReturn = useToolStore((s) => s.autoReturnToSelect);
   const addElement = useDocumentStore((s) => s.addElement);
+  const doc = useDocumentStore((s) => s.doc);
   const select = useSelectionStore((s) => s.select);
 
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -101,7 +103,9 @@ export function useCanvasDraw({ offsetX, offsetY, zoom, pageId, nextZIndex }: Ar
 
   const onMouseUp = useCallback((): boolean => {
     if (!draft) return false;
-    const el = draftToElement(draft, nextZIndex());
+    const count = doc.pages.flatMap((p) => p.elements).filter((e) => e.type === draft.tool).length;
+    const name = `${draft.tool}${count + 1}`;
+    const el = draftToElement(draft, nextZIndex(), name);
     if (el) {
       addElement(pageId, el);
       select([el.id]);
@@ -109,7 +113,7 @@ export function useCanvasDraw({ offsetX, offsetY, zoom, pageId, nextZIndex }: Ar
     }
     setDraft(null);
     return true;
-  }, [draft, pageId, nextZIndex, addElement, select, autoReturn, setTool]);
+  }, [draft, doc, pageId, nextZIndex, addElement, select, autoReturn, setTool]);
 
   const cancel = useCallback(() => setDraft(null), []);
 
@@ -149,9 +153,10 @@ function bboxFromTwoPoints(
   };
 }
 
-function draftToElement(d: Draft, zIndex: number): ElementModel | null {
+function draftToElement(d: Draft, zIndex: number, name: string): ElementModel | null {
   const baseCommon = {
     id: nextId('el'),
+    name,
     rotation: 0,
     visible: true,
     locked: false,
@@ -227,6 +232,28 @@ function draftToElement(d: Draft, zIndex: number): ElementModel | null {
       stroke: '#111111',
       strokeWidth: 0.25,
       tension: 0.5,
+    };
+    return el;
+  }
+
+  if (d.tool === 'text') {
+    const { x, y, w, h } = bboxFromTwoPoints(d.startMm, d.currentMm);
+    if (w < 0.5 && h < 0.5) return null;
+    const el: TextEl = {
+      ...baseCommon,
+      type: 'text',
+      x,
+      y,
+      width: Math.max(5, w),
+      height: Math.max(3, h),
+      text: 'Texto',
+      fontFamily: 'Arial',
+      fontSize: 10,
+      fontStyle: 'normal',
+      fontWeight: 400,
+      align: 'left',
+      lineHeight: 1.2,
+      color: '#000000',
     };
     return el;
   }
