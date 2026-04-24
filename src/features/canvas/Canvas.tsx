@@ -6,12 +6,14 @@ import Rulers, { RULER_SIZE_PX } from './Rulers';
 import ElementsLayer from './ElementsLayer';
 import DraftOverlay from './DraftOverlay';
 import SelectionTransformer from './SelectionTransformer';
+import TextEditorOverlay from './TextEditorOverlay';
 import { useCanvasDraw } from './useCanvasDraw';
 import { useDocumentStore } from '@/store/documentStore';
 import { useUIStore } from '@/store/uiStore';
 import { useToolStore } from '@/store/toolStore';
 import { useSelectionStore } from '@/store/selectionStore';
 import { MM_TO_PX, pxToMm } from '@/utils/units';
+import type { TextEl } from '@/types/document';
 
 export default function Canvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -23,10 +25,17 @@ export default function Canvas() {
   const setCursor = useUIStore((s) => s.setCursor);
   const activeTool = useToolStore((s) => s.active);
   const clearSelection = useSelectionStore((s) => s.clear);
+  const editingId = useSelectionStore((s) => s.editingId);
+  const setEditing = useSelectionStore((s) => s.setEditing);
 
   const pages = useDocumentStore((s) => s.doc.pages);
   const currentPageId = useDocumentStore((s) => s.currentPageId);
+  const updateElement = useDocumentStore((s) => s.updateElement);
   const page = pages.find((p) => p.id === currentPageId) ?? pages[0];
+
+  const editingEl = editingId
+    ? (page?.elements.find((e) => e.id === editingId && e.type === 'text') as TextEl | undefined)
+    : undefined;
 
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [spaceDown, setSpaceDown] = useState(false);
@@ -201,6 +210,19 @@ export default function Canvas() {
       className="h-full w-full relative overflow-hidden"
       style={{ background: 'var(--canvas)', cursor }}
     >
+      {editingEl && (
+        <TextEditorOverlay
+          el={editingEl}
+          zoom={zoom}
+          offsetX={offset.x}
+          offsetY={offset.y}
+          onCommit={(text) => {
+            updateElement(editingEl.id, { text });
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
       <Stage
         ref={stageRef}
         width={size.w}

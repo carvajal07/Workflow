@@ -27,6 +27,8 @@ export default function ElementsLayer({ page, zoom, offsetX, offsetY }: Props) {
   const updateElement = useDocumentStore((s) => s.updateElement);
   const select = useSelectionStore((s) => s.select);
   const toggle = useSelectionStore((s) => s.toggle);
+  const editingId = useSelectionStore((s) => s.editingId);
+  const setEditing = useSelectionStore((s) => s.setEditing);
   const activeTool = useToolStore((s) => s.active);
   const draggable = activeTool === 'select';
 
@@ -39,7 +41,9 @@ export default function ElementsLayer({ page, zoom, offsetX, offsetY }: Props) {
 
   return (
     <Group x={offsetX} y={offsetY}>
-      {elements.map((el) => renderElement(el, zoom, handleSelect, updateElement, draggable))}
+      {elements.map((el) =>
+        renderElement(el, zoom, handleSelect, updateElement, draggable, editingId, setEditing),
+      )}
     </Group>
   );
 }
@@ -50,6 +54,8 @@ function renderElement(
   onSelect: (id: string, additive: boolean) => void,
   onUpdate: (id: string, patch: Partial<ElementModel>) => void,
   draggable: boolean,
+  editingId: string | null,
+  setEditing: (id: string | null) => void,
 ) {
   const key = el.id;
   switch (el.type) {
@@ -95,7 +101,9 @@ function renderElement(
           zoom={zoom}
           onSelect={onSelect}
           onChange={(p) => onUpdate(el.id, p)}
+          onEdit={() => setEditing(el.id)}
           draggable={draggable}
+          isEditing={editingId === el.id}
         />
       );
     case 'dataField':
