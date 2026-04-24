@@ -32,7 +32,7 @@ export default function TextElement({ el, zoom, onSelect, onChange, draggable }:
       fontSize={fontPx}
       fontStyle={konvaFontStyle}
       textDecoration={el.textDecoration}
-      align={el.align === 'justify' ? 'left' : el.align}
+      align={el.align.startsWith('justify') ? 'left' : (el.align as 'left' | 'center' | 'right')}
       lineHeight={el.lineHeight}
       fill={el.color}
       rotation={el.rotation}

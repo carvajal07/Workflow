@@ -60,11 +60,15 @@ export default function LayoutTree() {
 
   const treeRef = useRef<TreeApi<TreeNode> | null>(null);
   // Sync canvas → tree: cuando cambia la selección de elementos en el lienzo,
-  // enfocar el primero en el árbol para que quede resaltado.
+  // enfocar el primero en el árbol para que quede resaltado. Sólo llamamos a
+  // tree.select si el árbol aún no lo tiene enfocado (evita loop con onSelect).
   useEffect(() => {
     const first = selectedIds[0];
-    if (!first) return;
-    treeRef.current?.select(`el:${first}`);
+    const tree = treeRef.current;
+    if (!tree || !first) return;
+    const nodeId = `el:${first}`;
+    if (tree.focusedNode?.id === nodeId) return;
+    tree.select(nodeId);
   }, [selectedIds]);
 
   function onSelect(nodes: NodeApi<TreeNode>[]) {
@@ -72,7 +76,9 @@ export default function LayoutTree() {
       .filter((n) => n.data.kind === 'element' && n.data.elementId)
       .map((n) => n.data.elementId!);
     if (elementIds.length > 0) {
-      setSelection(elementIds);
+      // evitar loop: si ya coincide con la selección actual, no re-emitir
+      const current = useSelectionStore.getState().selectedIds;
+      if (!arraysEqual(elementIds, current)) setSelection(elementIds);
       const first = elementIds[0];
       const containing = doc.pages.find((p) => p.elements.some((e) => e.id === first));
       if (containing && containing.id !== currentPageId) setCurrentPage(containing.id);
@@ -81,7 +87,8 @@ export default function LayoutTree() {
     const pageNode = nodes.find((n) => n.data.kind === 'page' && n.data.pageId);
     if (pageNode?.data.pageId) {
       setCurrentPage(pageNode.data.pageId);
-      setSelection([]);
+      const current = useSelectionStore.getState().selectedIds;
+      if (current.length > 0) setSelection([]);
     }
   }
 
@@ -232,4 +239,10 @@ function buildTree(doc: DocumentModel): TreeNode[] {
     group('g:rowSets', 'Rowsets', assetNodes('rs', a.rowSets)),
     group('g:cells', 'Cells', assetNodes('cell', a.cells)),
   ];
+}
+
+function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
