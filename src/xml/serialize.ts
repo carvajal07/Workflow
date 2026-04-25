@@ -188,7 +188,9 @@ function pathObject(
     }
   }
   b.push('        </Path>');
-  b.push('        <FillStyleId>Def.BlackFill</FillStyleId>');
+  if ('fill' in el) b.push(`        <Fill>${esc(el.fill)}</Fill>`);
+  b.push(`        <Stroke>${esc(el.stroke)}</Stroke>`);
+  b.push(`        <StrokeWidth>${el.strokeWidth}</StrokeWidth>`);
   b.push('      </PathObject>');
 }
 
@@ -201,6 +203,15 @@ function flowArea(b: string[], el: TextEl | DataFieldEl, page: Page, idx: number
   b.push(`        <FlowId>${esc(flowId)}</FlowId>`);
   b.push('        <BorderStyleId/>');
   b.push('        <FlowingToNextPage>False</FlowingToNextPage>');
+  if (el.type === 'text') {
+    b.push(`        <FontFamily>${esc(el.fontFamily)}</FontFamily>`);
+    b.push(`        <FontSize>${el.fontSize}</FontSize>`);
+    b.push(`        <FontWeight>${el.fontWeight}</FontWeight>`);
+    b.push(`        <FontStyle>${esc(el.fontStyle)}</FontStyle>`);
+    b.push(`        <TextColor>${esc(el.color)}</TextColor>`);
+    b.push(`        <LineHeight>${el.lineHeight}</LineHeight>`);
+    b.push(`        <Align>${esc(el.align)}</Align>`);
+  }
   b.push('      </FlowArea>');
 
   b.push('      <Flow>');

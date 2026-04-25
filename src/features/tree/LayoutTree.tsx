@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Tree, type NodeApi, type NodeRendererProps, type TreeApi } from 'react-arborist';
 import {
   ChevronDown,
@@ -29,19 +29,37 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
+interface RenameCtx {
+  renamingId: string | null;
+  startRename: (elementId: string) => void;
+  commitRename: (elementId: string, name: string) => void;
+  cancelRename: () => void;
+}
+
+const RenameContext = createContext<RenameCtx>({
+  renamingId: null,
+  startRename: () => {},
+  commitRename: () => {},
+  cancelRename: () => {},
+});
+
 /**
  * LayoutTree con react-arborist. Refleja el documento real (pages,
  * elements, assets) y propaga clicks a los stores:
  *  - Click en un elemento → selecciona en el canvas (selectionStore) y
  *    cambia la página activa a la que lo contiene.
  *  - Click en una página → la vuelve la página activa.
+ *  - Doble-click en nombre de elemento → edición inline del nombre.
  */
 export default function LayoutTree() {
   const doc = useDocumentStore((s) => s.doc);
   const currentPageId = useDocumentStore((s) => s.currentPageId);
   const setCurrentPage = useDocumentStore((s) => s.setCurrentPage);
+  const updateElement = useDocumentStore((s) => s.updateElement);
   const selectedIds = useSelectionStore((s) => s.selectedIds);
   const setSelection = useSelectionStore((s) => s.select);
+
+  const [renamingId, setRenamingId] = useState<string | null>(null);
 
   const data = useMemo(() => buildTree(doc), [doc]);
 
@@ -59,9 +77,6 @@ export default function LayoutTree() {
   }, []);
 
   const treeRef = useRef<TreeApi<TreeNode> | null>(null);
-  // Sync canvas → tree: cuando cambia la selección de elementos en el lienzo,
-  // enfocar el primero en el árbol para que quede resaltado. Sólo llamamos a
-  // tree.select si el árbol aún no lo tiene enfocado (evita loop con onSelect).
   useEffect(() => {
     const first = selectedIds[0];
     const tree = treeRef.current;
@@ -76,7 +91,6 @@ export default function LayoutTree() {
       .filter((n) => n.data.kind === 'element' && n.data.elementId)
       .map((n) => n.data.elementId!);
     if (elementIds.length > 0) {
-      // evitar loop: si ya coincide con la selección actual, no re-emitir
       const current = useSelectionStore.getState().selectedIds;
       if (!arraysEqual(elementIds, current)) setSelection(elementIds);
       const first = elementIds[0];
@@ -92,23 +106,35 @@ export default function LayoutTree() {
     }
   }
 
+  const renameCtx: RenameCtx = {
+    renamingId,
+    startRename: (id) => setRenamingId(id),
+    commitRename: (id, name) => {
+      updateElement(id, { name: name.trim() || undefined });
+      setRenamingId(null);
+    },
+    cancelRename: () => setRenamingId(null),
+  };
+
   return (
-    <div ref={containerRef} className="h-full w-full overflow-hidden">
-      <Tree<TreeNode>
-        ref={treeRef}
-        data={data}
-        width={size.w}
-        height={size.h}
-        rowHeight={22}
-        indent={14}
-        openByDefault={false}
-        disableDrag
-        disableDrop
-        onSelect={onSelect}
-      >
-        {Node}
-      </Tree>
-    </div>
+    <RenameContext.Provider value={renameCtx}>
+      <div ref={containerRef} className="h-full w-full overflow-hidden">
+        <Tree<TreeNode>
+          ref={treeRef}
+          data={data}
+          width={size.w}
+          height={size.h}
+          rowHeight={22}
+          indent={14}
+          openByDefault={false}
+          disableDrag
+          disableDrop
+          onSelect={onSelect}
+        >
+          {Node}
+        </Tree>
+      </div>
+    </RenameContext.Provider>
   );
 }
 
@@ -116,13 +142,24 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   const d = node.data;
   const hasChildren = (d.children?.length ?? 0) > 0;
   const Icon = iconFor(d);
+  const { renamingId, startRename, commitRename, cancelRename } = useContext(RenameContext);
+  const isRenaming = d.kind === 'element' && d.elementId != null && renamingId === d.elementId;
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isRenaming]);
+
   return (
     <div
       ref={dragHandle}
       style={style}
       className="flex items-center h-[22px] text-11 select-none cursor-default hover:bg-bg-3"
       onClick={() => {
-        if (hasChildren) node.toggle();
+        if (hasChildren && !isRenaming) node.toggle();
       }}
     >
       <button
@@ -141,13 +178,37 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
       <span className="w-4 flex items-center justify-center text-muted">
         <Icon size={12} />
       </span>
-      <span
-        className="flex-1 truncate px-1"
-        style={node.isSelected ? { color: 'var(--accent)' } : { color: 'var(--ink)' }}
-      >
-        {d.name}
-      </span>
-      {hasChildren && (
+
+      {isRenaming ? (
+        <input
+          ref={inputRef}
+          defaultValue={d.name}
+          className="flex-1 text-11 px-1 outline-none rounded"
+          style={{ background: 'var(--bg-2)', color: 'var(--ink)', border: '1px solid var(--accent)' }}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={(e) => commitRename(d.elementId!, e.currentTarget.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') commitRename(d.elementId!, e.currentTarget.value);
+            if (e.key === 'Escape') cancelRename();
+          }}
+        />
+      ) : (
+        <span
+          className="flex-1 truncate px-1"
+          style={node.isSelected ? { color: 'var(--accent)' } : { color: 'var(--ink)' }}
+          onDoubleClick={(e) => {
+            if (d.kind === 'element' && d.elementId) {
+              e.stopPropagation();
+              startRename(d.elementId);
+            }
+          }}
+        >
+          {d.name}
+        </span>
+      )}
+
+      {hasChildren && !isRenaming && (
         <span className="font-mono text-[10px] text-muted px-2">{d.children!.length}</span>
       )}
     </div>
