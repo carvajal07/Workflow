@@ -1,9 +1,13 @@
 let counter = 0;
 
-/** ID simple y legible: el1, el2, page1, doc1, etc. */
-export function nextId(prefix = 'el'): string {
+/**
+ * ID numérico autoincremental global.
+ * Todos los tipos (doc, page, element) comparten el mismo contador
+ * para garantizar unicidad dentro de la sesión: 1, 2, 3, 4…
+ */
+export function nextId(_prefix?: string): string {
   counter += 1;
-  return `${prefix}${counter}`;
+  return String(counter);
 }
 
 /** ID numérico para compatibilidad con el XML del backend (enteros). */
