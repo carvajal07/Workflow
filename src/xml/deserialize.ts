@@ -179,15 +179,19 @@ function parseElementsForPage(dom: Document, pageId: string): ElementModel[] {
     const lines = path?.querySelectorAll(':scope > LineTo').length ?? 0;
     const moves = path?.querySelectorAll(':scope > MoveTo').length ?? 0;
 
+    const fill = getText(cfg.querySelector(':scope > Fill')) ?? 'transparent';
+    const stroke = getText(cfg.querySelector(':scope > Stroke')) ?? '#111111';
+    const strokeWidth = parseFloat(getText(cfg.querySelector(':scope > StrokeWidth')) ?? '0.25');
+
     if (beziers >= 2) {
       out.push({
         type: 'circle',
         name,
         ...baseProps(id, idx),
         ...ps,
-        fill: '#000000',
-        stroke: '#000000',
-        strokeWidth: 0,
+        fill,
+        stroke,
+        strokeWidth,
       });
     } else if (moves === 1 && lines === 1) {
       const mv = path!.querySelector(':scope > MoveTo')!;
@@ -202,8 +206,8 @@ function parseElementsForPage(dom: Document, pageId: string): ElementModel[] {
         ...baseProps(id, idx),
         ...ps,
         points: [x1, y1, x2, y2],
-        stroke: '#000000',
-        strokeWidth: 0.2,
+        stroke,
+        strokeWidth,
       };
       out.push(line);
     } else {
@@ -212,9 +216,9 @@ function parseElementsForPage(dom: Document, pageId: string): ElementModel[] {
         name,
         ...baseProps(id, idx),
         ...ps,
-        fill: '#000000',
-        stroke: '#000000',
-        strokeWidth: 0,
+        fill,
+        stroke,
+        strokeWidth,
         cornerRadius: 0,
       };
       out.push(rect);
@@ -232,19 +236,26 @@ function parseElementsForPage(dom: Document, pageId: string): ElementModel[] {
     if (!ps) return;
     const flowId = getText(cfg.querySelector(':scope > FlowId'));
     const text = flowId ? extractFlowText(dom, flowId) : '';
+    const fontFamily = getText(cfg.querySelector(':scope > FontFamily')) ?? 'Arial';
+    const fontSize = parseFloat(getText(cfg.querySelector(':scope > FontSize')) ?? '10');
+    const fontWeight = parseInt(getText(cfg.querySelector(':scope > FontWeight')) ?? '400', 10);
+    const fontStyle = (getText(cfg.querySelector(':scope > FontStyle')) ?? 'normal') as 'normal' | 'italic';
+    const color = getText(cfg.querySelector(':scope > TextColor')) ?? '#000000';
+    const lineHeight = parseFloat(getText(cfg.querySelector(':scope > LineHeight')) ?? '1.2');
+    const align = (getText(cfg.querySelector(':scope > Align')) ?? 'left') as TextEl['align'];
     const el: TextEl = {
       type: 'text',
       name,
       ...baseProps(id, idx),
       ...ps,
       text,
-      fontFamily: 'Inter',
-      fontSize: 10,
-      fontStyle: 'normal',
-      fontWeight: 400,
-      align: 'left',
-      lineHeight: 1.2,
-      color: '#000000',
+      fontFamily,
+      fontSize,
+      fontStyle,
+      fontWeight,
+      align,
+      lineHeight,
+      color,
     };
     out.push(el);
   });
