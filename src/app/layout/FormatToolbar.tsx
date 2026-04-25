@@ -11,63 +11,161 @@ import {
 } from 'lucide-react';
 import { useDocumentStore } from '@/store/documentStore';
 import { useSelectionStore } from '@/store/selectionStore';
-import type { TextEl } from '@/types/document';
+import type { CircleEl, ElementModel, LineEl, PenEl, RectEl, TextEl } from '@/types/document';
 
 type Align = TextEl['align'];
+type ShapeEl = RectEl | CircleEl | LineEl | PenEl;
+type FillableEl = RectEl | CircleEl;
 
 const FONT_FAMILIES = ['Inter', 'JetBrains Mono', 'Arial', 'Helvetica', 'Times New Roman', 'Courier New'];
 const FONT_VARIANTS = ['Regular', 'Medium', 'Semi-Bold', 'Bold', 'Italic'];
 
-/**
- * Barra de formato: conectada al/los TextEl seleccionado(s).
- * - Cambios en familia, tamaño, B/I/U/S, color, align y justify aplican
- *   en todos los seleccionados vía `updateElement`.
- * - Si no hay ningún TextEl seleccionado, los controles se muestran
- *   pero deshabilitados.
- */
 export default function FormatToolbar() {
   const pages = useDocumentStore((s) => s.doc.pages);
   const updateElement = useDocumentStore((s) => s.updateElement);
   const selectedIds = useSelectionStore((s) => s.selectedIds);
 
+  // ── Elementos de texto seleccionados ──────────────────────────────────────
   const selectedTexts = useMemo<TextEl[]>(() => {
-    if (selectedIds.length === 0) return [];
+    if (!selectedIds.length) return [];
     const idSet = new Set(selectedIds);
-    return pages
-      .flatMap((p) => p.elements)
-      .filter((e): e is TextEl => idSet.has(e.id) && e.type === 'text');
+    return pages.flatMap((p) => p.elements).filter(
+      (e): e is TextEl => idSet.has(e.id) && e.type === 'text',
+    );
   }, [pages, selectedIds]);
 
-  const disabled = selectedTexts.length === 0;
+  // ── Formas seleccionadas ──────────────────────────────────────────────────
+  const selectedShapes = useMemo<ShapeEl[]>(() => {
+    if (!selectedIds.length) return [];
+    const idSet = new Set(selectedIds);
+    return pages.flatMap((p) => p.elements).filter(
+      (e): e is ShapeEl =>
+        idSet.has(e.id) &&
+        (e.type === 'rect' || e.type === 'circle' || e.type === 'line' || e.type === 'pen'),
+    );
+  }, [pages, selectedIds]);
 
-  function common<K extends keyof TextEl>(key: K): TextEl[K] | undefined {
-    if (selectedTexts.length === 0) return undefined;
+  const fillableShapes = useMemo<FillableEl[]>(
+    () => selectedShapes.filter((e): e is FillableEl => e.type === 'rect' || e.type === 'circle'),
+    [selectedShapes],
+  );
+
+  // ── Valores comunes de formas ─────────────────────────────────────────────
+  const shapeStroke =
+    selectedShapes.length > 0 && selectedShapes.every((e) => e.stroke === selectedShapes[0].stroke)
+      ? selectedShapes[0].stroke
+      : '#111111';
+
+  const shapeFill =
+    fillableShapes.length > 0 && fillableShapes.every((e) => e.fill === fillableShapes[0].fill)
+      ? fillableShapes[0].fill
+      : 'transparent';
+
+  function applyFill(fill: string) {
+    for (const el of fillableShapes) updateElement(el.id, { fill } as Partial<ElementModel>);
+  }
+  function applyStroke(stroke: string) {
+    for (const el of selectedShapes) updateElement(el.id, { stroke } as Partial<ElementModel>);
+  }
+
+  // ── Valores comunes de texto ──────────────────────────────────────────────
+  const textDisabled = selectedTexts.length === 0;
+
+  function textCommon<K extends keyof TextEl>(key: K): TextEl[K] | undefined {
+    if (!selectedTexts.length) return undefined;
     const first = selectedTexts[0][key];
     return selectedTexts.every((e) => e[key] === first) ? first : undefined;
   }
-
-  function apply(patch: Partial<TextEl>) {
+  function applyText(patch: Partial<TextEl>) {
     for (const el of selectedTexts) updateElement(el.id, patch);
   }
 
-  const fontFamily = (common('fontFamily') as string | undefined) ?? '';
-  const fontWeight = common('fontWeight') as number | undefined;
-  const fontStyle = common('fontStyle') as TextEl['fontStyle'] | undefined;
-  const fontSize = common('fontSize') as number | undefined;
-  const align = common('align') as Align | undefined;
-  const decoration = common('textDecoration') as TextEl['textDecoration'] | undefined;
-  const color = (common('color') as string | undefined) ?? '#000000';
+  const fontFamily = (textCommon('fontFamily') as string | undefined) ?? '';
+  const fontWeight = textCommon('fontWeight') as number | undefined;
+  const fontStyle = textCommon('fontStyle') as TextEl['fontStyle'] | undefined;
+  const fontSize = textCommon('fontSize') as number | undefined;
+  const align = textCommon('align') as Align | undefined;
+  const decoration = textCommon('textDecoration') as TextEl['textDecoration'] | undefined;
+  const textColor = (textCommon('color') as string | undefined) ?? '#000000';
 
   const variantLabel =
     fontStyle === 'italic' ? 'Italic' : fontWeight === undefined ? '' : weightLabel(fontWeight);
 
+  const hasShapes = selectedShapes.length > 0;
+  const hasText = selectedTexts.length > 0;
+
   return (
     <div className="h-full bg-bg-1 flex items-center px-2 gap-1.5 text-11">
+
+      {/* ── Sección formas ─────────────────────────────────────────────────── */}
+      {hasShapes && (
+        <>
+          {/* Relleno (solo rect / circle) */}
+          {fillableShapes.length > 0 && (
+            <>
+              <span className="text-[10px] text-muted">Relleno</span>
+              <label
+                className="w-[22px] h-[22px] rounded-3 border border-line-2 relative cursor-pointer overflow-hidden"
+                title={`Color de relleno (${shapeFill})`}
+              >
+                {/* patrón ajedrez cuando es transparent */}
+                <span
+                  className="absolute inset-0"
+                  style={
+                    shapeFill === 'transparent'
+                      ? {
+                          backgroundImage:
+                            'linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%),linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%)',
+                          backgroundSize: '6px 6px',
+                          backgroundPosition: '0 0,3px 3px',
+                        }
+                      : { background: shapeFill }
+                  }
+                />
+                <input
+                  type="color"
+                  value={shapeFill === 'transparent' ? '#ffffff' : shapeFill}
+                  onChange={(e) => applyFill(e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+              </label>
+              <button
+                type="button"
+                title="Sin relleno"
+                onClick={() => applyFill('transparent')}
+                className="w-[22px] h-[22px] flex items-center justify-center rounded-3 border border-line-2 text-muted hover:bg-bg-3 text-[13px] leading-none"
+              >
+                ∅
+              </button>
+            </>
+          )}
+
+          {/* Trazo */}
+          <span className="text-[10px] text-muted">Trazo</span>
+          <label
+            className="w-[22px] h-[22px] rounded-3 border border-line-2 relative cursor-pointer overflow-hidden"
+            title={`Color de trazo (${shapeStroke})`}
+          >
+            <span className="absolute inset-0" style={{ background: shapeStroke }} />
+            <input
+              type="color"
+              value={shapeStroke}
+              onChange={(e) => applyStroke(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+          </label>
+
+          {/* Separador si también hay texto seleccionado */}
+          {hasText && <Sep />}
+        </>
+      )}
+
+      {/* ── Sección texto ──────────────────────────────────────────────────── */}
       {/* Fuente */}
       <select
-        disabled={disabled}
+        disabled={textDisabled}
         value={fontFamily}
-        onChange={(e) => apply({ fontFamily: e.target.value })}
+        onChange={(e) => applyText({ fontFamily: e.target.value })}
         className="h-[22px] bg-bg-3 border border-line-2 rounded-3 text-11 px-1.5 outline-none disabled:opacity-50"
         style={{ width: 130 }}
       >
@@ -79,9 +177,9 @@ export default function FormatToolbar() {
         ))}
       </select>
       <select
-        disabled={disabled}
+        disabled={textDisabled}
         value={variantLabel}
-        onChange={(e) => apply(variantToPatch(e.target.value))}
+        onChange={(e) => applyText(variantToPatch(e.target.value))}
         className="h-[22px] bg-bg-3 border border-line-2 rounded-3 text-11 px-1.5 outline-none disabled:opacity-50"
         style={{ width: 96 }}
       >
@@ -93,14 +191,14 @@ export default function FormatToolbar() {
         ))}
       </select>
       <NumberField
-        disabled={disabled}
+        disabled={textDisabled}
         value={fontSize}
-        onCommit={(v) => apply({ fontSize: v })}
+        onCommit={(v) => applyText({ fontSize: v })}
         width={54}
         min={1}
       />
       <select
-        disabled={disabled}
+        disabled={textDisabled}
         defaultValue="pt"
         className="h-[22px] bg-bg-3 border border-line-2 rounded-3 text-11 px-1.5 outline-none disabled:opacity-50"
         style={{ width: 48 }}
@@ -113,48 +211,33 @@ export default function FormatToolbar() {
       <Sep />
 
       {/* Estilo */}
-      <Toggle
-        icon={Bold}
-        label="Bold"
-        disabled={disabled}
+      <Toggle icon={Bold} label="Bold" disabled={textDisabled}
         active={fontWeight !== undefined && fontWeight >= 600}
-        onClick={() => apply({ fontWeight: (fontWeight ?? 400) >= 600 ? 400 : 700 })}
+        onClick={() => applyText({ fontWeight: (fontWeight ?? 400) >= 600 ? 400 : 700 })}
       />
-      <Toggle
-        icon={Italic}
-        label="Itálica"
-        disabled={disabled}
+      <Toggle icon={Italic} label="Itálica" disabled={textDisabled}
         active={fontStyle === 'italic'}
-        onClick={() => apply({ fontStyle: fontStyle === 'italic' ? 'normal' : 'italic' })}
+        onClick={() => applyText({ fontStyle: fontStyle === 'italic' ? 'normal' : 'italic' })}
       />
-      <Toggle
-        icon={Underline}
-        label="Subrayado"
-        disabled={disabled}
+      <Toggle icon={Underline} label="Subrayado" disabled={textDisabled}
         active={decoration === 'underline'}
-        onClick={() =>
-          apply({ textDecoration: decoration === 'underline' ? undefined : 'underline' })
-        }
+        onClick={() => applyText({ textDecoration: decoration === 'underline' ? undefined : 'underline' })}
       />
-      <Toggle
-        icon={Strikethrough}
-        label="Tachado"
-        disabled={disabled}
+      <Toggle icon={Strikethrough} label="Tachado" disabled={textDisabled}
         active={decoration === 'line-through'}
-        onClick={() =>
-          apply({ textDecoration: decoration === 'line-through' ? undefined : 'line-through' })
-        }
+        onClick={() => applyText({ textDecoration: decoration === 'line-through' ? undefined : 'line-through' })}
       />
+      {/* Color de texto */}
       <label
         className="w-[22px] h-[22px] rounded-3 border border-line-2 relative cursor-pointer"
-        style={{ background: color, opacity: disabled ? 0.5 : 1 }}
-        title={`Color (${color})`}
+        style={{ background: textColor, opacity: textDisabled ? 0.5 : 1 }}
+        title={`Color texto (${textColor})`}
       >
         <input
           type="color"
-          disabled={disabled}
-          value={color}
-          onChange={(e) => apply({ color: e.target.value })}
+          disabled={textDisabled}
+          value={textColor}
+          onChange={(e) => applyText({ color: e.target.value })}
           className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
         />
       </label>
@@ -162,63 +245,39 @@ export default function FormatToolbar() {
       <Sep />
 
       {/* Alineación */}
-      <Toggle
-        icon={AlignLeft}
-        label="Alinear izquierda"
-        disabled={disabled}
-        active={align === 'left'}
-        onClick={() => apply({ align: 'left' })}
+      <Toggle icon={AlignLeft} label="Alinear izquierda" disabled={textDisabled}
+        active={align === 'left'} onClick={() => applyText({ align: 'left' })}
       />
-      <Toggle
-        icon={AlignCenter}
-        label="Centrar"
-        disabled={disabled}
-        active={align === 'center'}
-        onClick={() => apply({ align: 'center' })}
+      <Toggle icon={AlignCenter} label="Centrar" disabled={textDisabled}
+        active={align === 'center'} onClick={() => applyText({ align: 'center' })}
       />
-      <Toggle
-        icon={AlignRight}
-        label="Alinear derecha"
-        disabled={disabled}
-        active={align === 'right'}
-        onClick={() => apply({ align: 'right' })}
+      <Toggle icon={AlignRight} label="Alinear derecha" disabled={textDisabled}
+        active={align === 'right'} onClick={() => applyText({ align: 'right' })}
       />
 
       <Sep />
 
-      {/* Justificación (última línea) */}
-      <Toggle
-        icon={JustifyLastIcon('left')}
-        label="Justificar — última línea izquierda"
-        disabled={disabled}
-        active={align === 'justify-left'}
-        onClick={() => apply({ align: 'justify-left' })}
+      {/* Justificación */}
+      <Toggle icon={JustifyLastIcon('left')} label="Justificar — última línea izquierda"
+        disabled={textDisabled} active={align === 'justify-left'}
+        onClick={() => applyText({ align: 'justify-left' })}
       />
-      <Toggle
-        icon={JustifyLastIcon('center')}
-        label="Justificar — última línea centrada"
-        disabled={disabled}
-        active={align === 'justify-center'}
-        onClick={() => apply({ align: 'justify-center' })}
+      <Toggle icon={JustifyLastIcon('center')} label="Justificar — última línea centrada"
+        disabled={textDisabled} active={align === 'justify-center'}
+        onClick={() => applyText({ align: 'justify-center' })}
       />
-      <Toggle
-        icon={JustifyLastIcon('right')}
-        label="Justificar — última línea derecha"
-        disabled={disabled}
-        active={align === 'justify-right'}
-        onClick={() => apply({ align: 'justify-right' })}
+      <Toggle icon={JustifyLastIcon('right')} label="Justificar — última línea derecha"
+        disabled={textDisabled} active={align === 'justify-right'}
+        onClick={() => applyText({ align: 'justify-right' })}
       />
-      <Toggle
-        icon={AlignJustify}
-        label="Justificar bloque"
-        disabled={disabled}
-        active={align === 'justify-block'}
-        onClick={() => apply({ align: 'justify-block' })}
+      <Toggle icon={AlignJustify} label="Justificar bloque"
+        disabled={textDisabled} active={align === 'justify-block'}
+        onClick={() => applyText({ align: 'justify-block' })}
       />
 
       <div className="ml-auto">
         <select
-          disabled={disabled}
+          disabled={textDisabled}
           className="h-[22px] bg-bg-3 border border-line-2 rounded-3 text-11 px-1.5 outline-none disabled:opacity-50"
           style={{ width: 150 }}
         >
@@ -231,6 +290,8 @@ export default function FormatToolbar() {
     </div>
   );
 }
+
+// ── Sub-componentes ───────────────────────────────────────────────────────────
 
 function Sep() {
   return <div className="w-px h-5 bg-line-2 mx-1.5" />;
@@ -316,10 +377,6 @@ function variantToPatch(v: string): Partial<TextEl> {
   }
 }
 
-/**
- * Icono "justificar con última línea alineada a X". Dibuja 3 líneas
- * completas + 1 línea corta en la posición indicada.
- */
 function JustifyLastIcon(lastLine: 'left' | 'center' | 'right') {
   return function Icon({ size = 13 }: { size?: number | string }) {
     const stroke = 'currentColor';
