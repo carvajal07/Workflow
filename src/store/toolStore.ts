@@ -24,6 +24,6 @@ interface ToolState {
 export const useToolStore = create<ToolState>((set) => ({
   active: 'select',
   setActive: (t) => set({ active: t }),
-  autoReturnToSelect: true,
+  autoReturnToSelect: false,
   setAutoReturn: (v) => set({ autoReturnToSelect: v }),
 }));
