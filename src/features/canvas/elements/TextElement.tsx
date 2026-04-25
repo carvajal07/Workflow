@@ -8,12 +8,13 @@ interface Props {
   zoom: number;
   onSelect: (id: string, additive: boolean) => void;
   onChange: (patch: Partial<TextEl>) => void;
+  onEdit: () => void;
   draggable: boolean;
+  isEditing: boolean;
 }
 
-export default function TextElement({ el, zoom, onSelect, onChange, draggable }: Props) {
+export default function TextElement({ el, zoom, onSelect, onChange, onEdit, draggable, isEditing }: Props) {
   const s = MM_TO_PX * zoom;
-  // fontSize vive en pt → mm → px.
   const fontPx = (el.fontSize / PT_PER_MM) * s;
   const weight = el.fontWeight >= 600 ? 'bold' : 'normal';
   const italic = el.fontStyle === 'italic' ? 'italic' : '';
@@ -36,10 +37,16 @@ export default function TextElement({ el, zoom, onSelect, onChange, draggable }:
       lineHeight={el.lineHeight}
       fill={el.color}
       rotation={el.rotation}
-      visible={el.visible}
+      visible={el.visible && !isEditing}
       wrap="word"
-      draggable={draggable && !el.locked}
-      onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey)}
+      draggable={draggable && !el.locked && !isEditing}
+      onMouseDown={(e) => {
+        if (!isEditing) onSelect(el.id, e.evt.shiftKey);
+      }}
+      onDblClick={() => {
+        onSelect(el.id, false);
+        onEdit();
+      }}
       onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
         const node = e.target;
         onChange({ x: node.x() / s, y: node.y() / s });
