@@ -13,17 +13,61 @@ interface Props {
 
 export default function TextEditorOverlay({ el, zoom, offsetX, offsetY, onCommit, onCancel }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  // Prevent double-commit when both mousedown listener and blur fire
+  const doneRef = useRef(false);
   const cancelRef = useRef(false);
+  // Keep latest callbacks stable inside the mount-time effect closure
+  const onCommitRef = useRef(onCommit);
+  const onCancelRef = useRef(onCancel);
+  const elTextRef = useRef(el.text);
+  useEffect(() => { onCommitRef.current = onCommit; }, [onCommit]);
+  useEffect(() => { onCancelRef.current = onCancel; }, [onCancel]);
+  useEffect(() => { elTextRef.current = el.text; }, [el.text]);
+
   const s = MM_TO_PX * zoom;
   const fontPx = (el.fontSize / PT_PER_MM) * s;
   const minHeight = el.height * s;
 
+  function commit() {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onCommitRef.current(ref.current?.value ?? elTextRef.current);
+  }
+
+  function cancel() {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onCancelRef.current();
+  }
+
+  // On mount: focus + outside-click listener.
+  // The Konva <canvas> has no tabIndex so clicking on it does NOT fire blur
+  // on the textarea. The document mousedown (capture) is the reliable trigger.
   useEffect(() => {
     const ta = ref.current;
     if (!ta) return;
     ta.focus();
     ta.select();
-    autoResize(ta, minHeight);
+    autoResize(ta, ta.offsetHeight);
+
+    function handleOutsideMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        if (cancelRef.current) {
+          cancel();
+        } else {
+          commit();
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideMouseDown, true);
+    return () => document.removeEventListener('mousedown', handleOutsideMouseDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-size overlay when zoom changes
+  useEffect(() => {
+    if (ref.current) autoResize(ref.current, minHeight);
   }, [minHeight]);
 
   function autoResize(ta: HTMLTextAreaElement, min: number) {
@@ -39,15 +83,16 @@ export default function TextEditorOverlay({ el, zoom, offsetX, offsetY, onCommit
     if (e.key === 'Escape') {
       e.preventDefault();
       cancelRef.current = true;
-      ref.current?.blur();
+      cancel();
     }
   }
 
+  // Fallback for tab-away or programmatic blur (mousedown listener handles clicks)
   function handleBlur() {
     if (cancelRef.current) {
-      onCancel();
+      cancel();
     } else {
-      onCommit(ref.current?.value ?? el.text);
+      commit();
     }
   }
 
