@@ -40,7 +40,7 @@ export default function LineLikeElement<T extends LineEl | PenEl>({
       lineJoin="round"
       draggable={draggable && !el.locked}
       hitStrokeWidth={Math.max(6, el.strokeWidth * s + 4)}
-      onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey)}
+      onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey)}
       onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
         const node = e.target;
         onChange({ x: node.x() / s, y: node.y() / s } as Partial<T>);

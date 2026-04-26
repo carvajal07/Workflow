@@ -33,6 +33,7 @@ export default function ElementsLayer({ page, zoom, offsetX, offsetY }: Props) {
   const draggable = activeTool === 'select';
 
   function handleSelect(id: string, additive: boolean) {
+    if (activeTool !== 'select') return;
     if (additive) toggle(id);
     else select([id]);
   }

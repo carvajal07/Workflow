@@ -29,7 +29,7 @@ export default function CircleElement({ el, zoom, onSelect, onChange, draggable 
       strokeWidth={el.strokeWidth * s}
       visible={el.visible}
       draggable={draggable && !el.locked}
-      onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey)}
+      onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey)}
       onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
         const node = e.target;
         onChange({

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Layer, Stage } from 'react-konva';
+import { Layer, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
 import Sheet from './Sheet';
 import Rulers, { RULER_SIZE_PX } from './Rulers';
@@ -31,6 +31,7 @@ export default function Canvas() {
   const pages = useDocumentStore((s) => s.doc.pages);
   const currentPageId = useDocumentStore((s) => s.currentPageId);
   const updateElement = useDocumentStore((s) => s.updateElement);
+  const removeElements = useDocumentStore((s) => s.removeElements);
   const page = pages.find((p) => p.id === currentPageId) ?? pages[0];
 
   const editingEl = editingId
@@ -41,6 +42,10 @@ export default function Canvas() {
   const [spaceDown, setSpaceDown] = useState(false);
   const panningRef = useRef(false);
   const panStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+
+  // marquee selection
+  const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const marqueeRef = useRef<typeof marquee>(null);
 
   // siguiente zIndex a asignar a un nuevo elemento
   const nextZIndex = useMemo(
@@ -84,6 +89,12 @@ export default function Canvas() {
       if (e.code === 'Space') {
         e.preventDefault();
         setSpaceDown(true);
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        const ids = useSelectionStore.getState().selectedIds;
+        if (ids.length > 0) {
+          useDocumentStore.getState().removeElements(ids);
+          useSelectionStore.getState().clear();
+        }
       } else if (e.key === '0') {
         fitToViewport();
       } else if (e.key === '1') {
@@ -156,14 +167,30 @@ export default function Canvas() {
 
   const isHand = activeTool === 'hand' || spaceDown;
 
+  function stagePosPx(e: Konva.KonvaEventObject<MouseEvent>) {
+    const stage = e.target.getStage();
+    const p = stage?.getPointerPosition();
+    return p ?? null;
+  }
+
   function onMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
     const isOnStage = e.target === e.target.getStage();
 
     if (!isHand) {
       // herramientas de dibujo: iniciar draft y salir
       if (draw.onMouseDown(e)) return;
-      // select sobre área vacía → limpiar selección
-      if (activeTool === 'select' && isOnStage) clearSelection();
+      if (activeTool === 'select') {
+        if (isOnStage) {
+          // drag marquee on empty area
+          const p = stagePosPx(e);
+          if (p) {
+            const m = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+            setMarquee(m);
+            marqueeRef.current = m;
+          }
+          clearSelection();
+        }
+      }
       return;
     }
 
@@ -183,6 +210,15 @@ export default function Canvas() {
       });
       return;
     }
+    if (marqueeRef.current) {
+      const p = stagePosPx(e);
+      if (p) {
+        const m = { ...marqueeRef.current, x2: p.x, y2: p.y };
+        setMarquee(m);
+        marqueeRef.current = m;
+      }
+      return;
+    }
     // si estamos dibujando, actualizar draft
     draw.onMouseMove(e);
     const stage = stageRef.current;
@@ -193,6 +229,27 @@ export default function Canvas() {
   }
   function onMouseUp() {
     panningRef.current = false;
+    if (marqueeRef.current) {
+      const m = marqueeRef.current;
+      const rx1 = Math.min(m.x1, m.x2);
+      const ry1 = Math.min(m.y1, m.y2);
+      const rx2 = Math.max(m.x1, m.x2);
+      const ry2 = Math.max(m.y1, m.y2);
+      if (rx2 - rx1 > 4 && ry2 - ry1 > 4 && page) {
+        const s = MM_TO_PX * zoom;
+        const hits = page.elements.filter((el) => {
+          const ex1 = el.x * s + offset.x;
+          const ey1 = el.y * s + offset.y;
+          const ex2 = ex1 + ('width' in el ? (el as { width: number }).width * s : 0);
+          const ey2 = ey1 + ('height' in el ? (el as { height: number }).height * s : 0);
+          return ex1 < rx2 && ex2 > rx1 && ey1 < ry2 && ey2 > ry1;
+        });
+        if (hits.length > 0) useSelectionStore.getState().select(hits.map((e) => e.id));
+      }
+      setMarquee(null);
+      marqueeRef.current = null;
+      return;
+    }
     draw.onMouseUp();
   }
 
@@ -252,6 +309,19 @@ export default function Canvas() {
             />
           )}
           <SelectionTransformer stageRef={stageRef} />
+          {marquee && (
+            <Rect
+              x={Math.min(marquee.x1, marquee.x2)}
+              y={Math.min(marquee.y1, marquee.y2)}
+              width={Math.abs(marquee.x2 - marquee.x1)}
+              height={Math.abs(marquee.y2 - marquee.y1)}
+              fill="rgba(100,149,237,0.15)"
+              stroke="#6495ed"
+              strokeWidth={1}
+              dash={[4, 3]}
+              listening={false}
+            />
+          )}
         </Layer>
 
         <Layer listening={false}>

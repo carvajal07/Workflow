@@ -35,7 +35,7 @@ export default function ImageElement({ el, zoom, onSelect, onChange, draggable }
         rotation={el.rotation}
         visible={el.visible}
         draggable={draggable && !el.locked}
-        onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey)}
+        onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey)}
         onDragEnd={onDragEnd}
       >
         <Rect
@@ -84,7 +84,7 @@ export default function ImageElement({ el, zoom, onSelect, onChange, draggable }
       }
       visible={el.visible}
       draggable={draggable && !el.locked}
-      onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey)}
+      onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey)}
       onDragEnd={onDragEnd}
       onTransformEnd={(e) => {
         const node = e.target as Konva.Image;

@@ -41,7 +41,7 @@ export default function TextElement({ el, zoom, onSelect, onChange, onEdit, drag
       wrap="word"
       draggable={draggable && !el.locked && !isEditing}
       onMouseDown={(e) => {
-        if (!isEditing) onSelect(el.id, e.evt.shiftKey);
+        if (!isEditing) onSelect(el.id, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey);
       }}
       onDblClick={() => {
         onSelect(el.id, false);
