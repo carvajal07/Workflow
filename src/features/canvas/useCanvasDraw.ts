@@ -67,8 +67,6 @@ export function useCanvasDraw({ offsetX, offsetY, zoom, pageId, nextZIndex }: Ar
   const onMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>): boolean => {
       if (!isDrawTool(activeTool)) return false;
-      // sólo iniciar dibujo si el click es en el Stage (no sobre otro elemento)
-      if (e.target !== e.target.getStage()) return false;
       const m = pointerMm(e.target.getStage());
       if (!m) return false;
       setDraft({

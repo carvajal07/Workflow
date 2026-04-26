@@ -28,7 +28,7 @@ export default function RectElement({ el, zoom, onSelect, onChange, draggable }:
       cornerRadius={el.cornerRadius * s}
       visible={el.visible}
       draggable={draggable && !el.locked}
-      onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey)}
+      onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey)}
       onDragEnd={(e: Konva.KonvaEventObject<DragEvent>) => {
         const node = e.target;
         onChange({ x: node.x() / s, y: node.y() / s });
