@@ -33,13 +33,15 @@ interface TreeNode {
 
 interface RenameCtx {
   renamingId: string | null;
-  startRename: (elementId: string) => void;
-  commitRename: (elementId: string, name: string) => void;
+  renamingKind: 'element' | 'page' | null;
+  startRename: (id: string, kind: 'element' | 'page') => void;
+  commitRename: (id: string, name: string) => void;
   cancelRename: () => void;
 }
 
 const RenameContext = createContext<RenameCtx>({
   renamingId: null,
+  renamingKind: null,
   startRename: () => {},
   commitRename: () => {},
   cancelRename: () => {},
@@ -58,10 +60,12 @@ export default function LayoutTree() {
   const currentPageId = useDocumentStore((s) => s.currentPageId);
   const setCurrentPage = useDocumentStore((s) => s.setCurrentPage);
   const updateElement = useDocumentStore((s) => s.updateElement);
+  const updatePage = useDocumentStore((s) => s.updatePage);
   const selectedIds = useSelectionStore((s) => s.selectedIds);
   const setSelection = useSelectionStore((s) => s.select);
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renamingKind, setRenamingKind] = useState<'element' | 'page' | null>(null);
 
   const data = useMemo(() => buildTree(doc), [doc]);
 
@@ -110,12 +114,25 @@ export default function LayoutTree() {
 
   const renameCtx: RenameCtx = {
     renamingId,
-    startRename: (id) => setRenamingId(id),
-    commitRename: (id, name) => {
-      updateElement(id, { name: name.trim() || undefined });
-      setRenamingId(null);
+    renamingKind,
+    startRename: (id, kind) => {
+      setRenamingId(id);
+      setRenamingKind(kind);
     },
-    cancelRename: () => setRenamingId(null),
+    commitRename: (id, name) => {
+      const trimmed = name.trim();
+      if (renamingKind === 'page') {
+        if (trimmed) updatePage(id, { name: trimmed });
+      } else {
+        updateElement(id, { name: trimmed || undefined });
+      }
+      setRenamingId(null);
+      setRenamingKind(null);
+    },
+    cancelRename: () => {
+      setRenamingId(null);
+      setRenamingKind(null);
+    },
   };
 
   return (
@@ -145,9 +162,14 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   const hasChildren = (d.children?.length ?? 0) > 0;
   const Icon = iconFor(d);
   const { renamingId, startRename, commitRename, cancelRename } = useContext(RenameContext);
-  const isRenaming = d.kind === 'element' && d.elementId != null && renamingId === d.elementId;
-  const inputRef = useRef<HTMLInputElement>(null);
 
+  const isRenamingEl = d.kind === 'element' && d.elementId != null && renamingId === d.elementId;
+  const isRenamingPage = d.kind === 'page' && d.pageId != null && renamingId === d.pageId;
+  const isRenaming = isRenamingEl || isRenamingPage;
+
+  const renameId = isRenamingEl ? d.elementId! : d.pageId!;
+
+  const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (isRenaming && inputRef.current) {
       inputRef.current.focus();
@@ -188,10 +210,10 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
           className="flex-1 text-11 px-1 outline-none rounded"
           style={{ background: 'var(--bg-2)', color: 'var(--ink)', border: '1px solid var(--accent)' }}
           onClick={(e) => e.stopPropagation()}
-          onBlur={(e) => commitRename(d.elementId!, e.currentTarget.value)}
+          onBlur={(e) => commitRename(renameId, e.currentTarget.value)}
           onKeyDown={(e) => {
             e.stopPropagation();
-            if (e.key === 'Enter') commitRename(d.elementId!, e.currentTarget.value);
+            if (e.key === 'Enter') commitRename(renameId, e.currentTarget.value);
             if (e.key === 'Escape') cancelRename();
           }}
         />
@@ -200,9 +222,11 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
           className="flex-1 truncate px-1"
           style={node.isSelected ? { color: 'var(--accent)' } : { color: 'var(--ink)' }}
           onDoubleClick={(e) => {
+            e.stopPropagation();
             if (d.kind === 'element' && d.elementId) {
-              e.stopPropagation();
-              startRename(d.elementId);
+              startRename(d.elementId, 'element');
+            } else if (d.kind === 'page' && d.pageId) {
+              startRename(d.pageId, 'page');
             }
           }}
         >

@@ -102,6 +102,12 @@ export default function Canvas() {
         if (ids.length > 0) {
           useDocumentStore.getState().removeElements(ids);
           useSelectionStore.getState().clear();
+        } else {
+          // Sin elementos seleccionados → eliminar página actual (si hay más de una)
+          const ds = useDocumentStore.getState();
+          if (ds.doc.pages.length > 1) {
+            ds.removePage(ds.currentPageId);
+          }
         }
       } else if (e.key === '0') {
         fitToViewport();
