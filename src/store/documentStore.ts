@@ -8,7 +8,7 @@ function emptyDocument(): DocumentModel {
   const pageId = nextId('page');
   const defaultPage: Page = {
     id: pageId,
-    name: 'Page 1',
+    name: 'Página 1',
     size: { width: 210, height: 297, unit: 'mm' },
     background: '#ffffff',
     margin: { top: 15, right: 15, bottom: 15, left: 15 },
@@ -80,7 +80,7 @@ export const useDocumentStore = create<DocumentState>()(
           const id = nextId('page');
           const page: Page = {
             id,
-            name: `Page ${s.doc.pages.length + 1}`,
+            name: `Página ${s.doc.pages.length + 1}`,
             size: { width: 210, height: 297, unit: 'mm' },
             background: '#ffffff',
             margin: { top: 15, right: 15, bottom: 15, left: 15 },

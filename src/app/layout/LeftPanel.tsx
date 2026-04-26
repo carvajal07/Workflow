@@ -14,7 +14,7 @@ export default function LeftPanel() {
       <PanelGroup direction="vertical" autoSaveId="left-panel">
         <Panel defaultSize={55} minSize={20}>
           <div className="h-full flex flex-col">
-            <SectionHeader title="Layout Tree" />
+            <SectionHeader title="Árbol de capas" />
             <div className="flex-1 overflow-auto">
               <LayoutTree />
             </div>
@@ -23,7 +23,7 @@ export default function LeftPanel() {
         <PanelResizeHandle className="h-px bg-line hover:bg-accent-dim transition-colors" />
         <Panel defaultSize={45} minSize={20}>
           <div className="h-full flex flex-col">
-            <SectionHeader title="Layout Properties" />
+            <SectionHeader title="Propiedades" />
             <div className="flex-1 overflow-auto">
               <Inspector />
             </div>

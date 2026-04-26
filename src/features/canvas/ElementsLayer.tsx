@@ -7,6 +7,8 @@ import DataFieldElement from './elements/DataFieldElement';
 import ImageElement from './elements/ImageElement';
 import QrElement from './elements/QrElement';
 import TableElement from './elements/TableElement';
+import FrameElement from './elements/FrameElement';
+import FlowableElement from './elements/FlowableElement';
 import type { ElementModel, Page } from '@/types/document';
 import { useDocumentStore } from '@/store/documentStore';
 import { useSelectionStore } from '@/store/selectionStore';
@@ -143,6 +145,28 @@ function renderElement(
     case 'table':
       return (
         <TableElement
+          key={key}
+          el={el}
+          zoom={zoom}
+          onSelect={onSelect}
+          onChange={(p) => onUpdate(el.id, p)}
+          draggable={draggable}
+        />
+      );
+    case 'frame':
+      return (
+        <FrameElement
+          key={key}
+          el={el}
+          zoom={zoom}
+          onSelect={onSelect}
+          onChange={(p) => onUpdate(el.id, p)}
+          draggable={draggable}
+        />
+      );
+    case 'flowable':
+      return (
+        <FlowableElement
           key={key}
           el={el}
           zoom={zoom}

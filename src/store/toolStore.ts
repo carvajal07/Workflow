@@ -11,7 +11,8 @@ export type Tool =
   | 'image'
   | 'table'
   | 'qr'
-  | 'dataField';
+  | 'dataField'
+  | 'frame';
 
 interface ToolState {
   active: Tool;

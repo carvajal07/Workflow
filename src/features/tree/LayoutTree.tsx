@@ -8,6 +8,8 @@ import {
   FileText,
   Folder,
   Image as ImageIcon,
+  LayoutTemplate,
+  Layers,
   Minus,
   QrCode,
   Square,
@@ -236,6 +238,10 @@ function iconFor(n: TreeNode) {
         return QrCode;
       case 'dataField':
         return Variable;
+      case 'frame':
+        return LayoutTemplate;
+      case 'flowable':
+        return Layers;
     }
   }
   if (n.kind === 'page') return FileText;
@@ -243,11 +249,25 @@ function iconFor(n: TreeNode) {
   return Folder;
 }
 
+const TYPE_LABELS: Record<string, string> = {
+  text: 'Texto',
+  rect: 'Rectángulo',
+  circle: 'Círculo',
+  line: 'Línea',
+  pen: 'Lápiz',
+  image: 'Imagen',
+  table: 'Tabla',
+  qr: 'QR',
+  dataField: 'Campo',
+  frame: 'Área',
+  flowable: 'Sub-área',
+};
+
 function buildTree(doc: DocumentModel): TreeNode[] {
   const a = doc.assets;
   const elementNode = (e: ElementModel): TreeNode => ({
     id: `el:${e.id}`,
-    name: e.name ?? e.type,
+    name: e.name ?? (TYPE_LABELS[e.type] ?? e.type),
     kind: 'element',
     elementType: e.type,
     elementId: e.id,
@@ -265,7 +285,7 @@ function buildTree(doc: DocumentModel): TreeNode[] {
     items.map((i) => ({ id: `${prefix}:${i.id}`, name: i.name, kind: 'asset' }));
 
   return [
-    group('g:data', 'Data', [
+    group('g:data', 'Datos', [
       ...doc.data.variables.map(
         (v): TreeNode => ({ id: `var:${v.id}`, name: v.name, kind: 'variable' }),
       ),
@@ -275,30 +295,43 @@ function buildTree(doc: DocumentModel): TreeNode[] {
     ]),
     group(
       'g:pages',
-      'Pages',
+      'Páginas',
       doc.pages.map(
         (p): TreeNode => ({
           id: `page:${p.id}`,
           name: p.name,
           kind: 'page',
           pageId: p.id,
-          children: p.elements.map(elementNode),
+          children: p.elements
+            .filter((e) => e.type !== 'flowable')
+            .map((e) => {
+              if (e.type === 'frame') {
+                const flowables = p.elements.filter(
+                  (f) => f.type === 'flowable' && (f as { frameId?: string }).frameId === e.id,
+                );
+                return {
+                  ...elementNode(e),
+                  children: flowables.map(elementNode),
+                };
+              }
+              return elementNode(e);
+            }),
         }),
       ),
     ),
-    group('g:elements', 'Elements', doc.pages.flatMap((p) => p.elements.map(elementNode))),
-    group('g:flows', 'Flows', assetNodes('flow', doc.flows)),
-    group('g:paraStyles', 'ParagraphStyles', assetNodes('ps', a.paragraphStyles)),
-    group('g:textStyles', 'TextStyles', assetNodes('ts', a.textStyles)),
-    group('g:fonts', 'Fonts', assetNodes('font', a.fonts)),
-    group('g:borderStyles', 'BorderStyles', assetNodes('bs', a.borderStyles)),
-    group('g:lineStyles', 'LineStyles', assetNodes('ls', a.lineStyles)),
-    group('g:fillStyles', 'FillStyles', assetNodes('fs', a.fillStyles)),
-    group('g:colors', 'Colors', assetNodes('color', a.colors)),
-    group('g:images', 'Images', assetNodes('img', a.images)),
-    group('g:tables', 'Tables', assetNodes('tbl', a.tables)),
-    group('g:rowSets', 'Rowsets', assetNodes('rs', a.rowSets)),
-    group('g:cells', 'Cells', assetNodes('cell', a.cells)),
+    group('g:elements', 'Elementos', doc.pages.flatMap((p) => p.elements.filter((e) => e.type !== 'flowable').map(elementNode))),
+    group('g:flows', 'Flujos', assetNodes('flow', doc.flows)),
+    group('g:paraStyles', 'Estilos de párrafo', assetNodes('ps', a.paragraphStyles)),
+    group('g:textStyles', 'Estilos de texto', assetNodes('ts', a.textStyles)),
+    group('g:fonts', 'Fuentes', assetNodes('font', a.fonts)),
+    group('g:borderStyles', 'Estilos de borde', assetNodes('bs', a.borderStyles)),
+    group('g:lineStyles', 'Estilos de línea', assetNodes('ls', a.lineStyles)),
+    group('g:fillStyles', 'Estilos de relleno', assetNodes('fs', a.fillStyles)),
+    group('g:colors', 'Colores', assetNodes('color', a.colors)),
+    group('g:images', 'Imágenes', assetNodes('img', a.images)),
+    group('g:tables', 'Tablas', assetNodes('tbl', a.tables)),
+    group('g:rowSets', 'Filas', assetNodes('rs', a.rowSets)),
+    group('g:cells', 'Celdas', assetNodes('cell', a.cells)),
   ];
 }
 

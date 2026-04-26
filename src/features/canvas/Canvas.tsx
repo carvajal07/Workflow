@@ -24,6 +24,7 @@ export default function Canvas() {
   const setZoom = useUIStore((s) => s.setZoom);
   const setCursor = useUIStore((s) => s.setCursor);
   const activeTool = useToolStore((s) => s.active);
+  const setActiveTool = useToolStore((s) => s.setActive);
   const clearSelection = useSelectionStore((s) => s.clear);
   const editingId = useSelectionStore((s) => s.editingId);
   const setEditing = useSelectionStore((s) => s.setEditing);
@@ -101,6 +102,8 @@ export default function Canvas() {
         setZoom(1);
       } else if (e.key === 'Escape') {
         draw.cancel();
+      } else if (e.key === 'f' || e.key === 'F') {
+        setActiveTool('frame');
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -253,13 +256,16 @@ export default function Canvas() {
     draw.onMouseUp();
   }
 
+  const CROSSHAIR_CURSOR =
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cline x1='10' y1='1' x2='10' y2='19' stroke='%23111111' stroke-width='1.5'/%3E%3Cline x1='1' y1='10' x2='19' y2='10' stroke='%23111111' stroke-width='1.5'/%3E%3Ccircle cx='10' cy='10' r='2.5' fill='none' stroke='%23111111' stroke-width='1.2'/%3E%3C/svg%3E\") 10 10, crosshair";
+
   const cursor = isHand
     ? panningRef.current
       ? 'grabbing'
       : 'grab'
     : activeTool === 'select'
       ? 'default'
-      : 'crosshair';
+      : CROSSHAIR_CURSOR;
 
   return (
     <div
