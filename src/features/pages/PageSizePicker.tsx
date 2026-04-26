@@ -9,25 +9,14 @@ import { PAGE_SIZES, findPreset } from '@/utils/pageSizes';
 export default function PageSizePicker() {
   const pages = useDocumentStore((s) => s.doc.pages);
   const currentPageId = useDocumentStore((s) => s.currentPageId);
-  const updateElement = useDocumentStore((s) => s.updateElement);
-  const setDoc = useDocumentStore((s) => s.setDoc);
-  const doc = useDocumentStore((s) => s.doc);
+  const updatePage = useDocumentStore((s) => s.updatePage);
   const page = pages.find((p) => p.id === currentPageId) ?? pages[0];
 
   if (!page) return null;
   const preset = findPreset(page.size.width, page.size.height);
 
   function applySize(w: number, h: number) {
-    const next = {
-      ...doc,
-      pages: doc.pages.map((p) =>
-        p.id === page!.id ? { ...p, size: { ...p.size, width: w, height: h } } : p,
-      ),
-      updatedAt: new Date().toISOString(),
-    };
-    setDoc(next);
-    // evita que el linter se queje sobre updateElement no usado en este archivo
-    void updateElement;
+    updatePage(page!.id, { size: { ...page!.size, width: w, height: h } });
   }
 
   return (

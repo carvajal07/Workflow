@@ -13,7 +13,8 @@ import { useUIStore } from '@/store/uiStore';
 import { useToolStore } from '@/store/toolStore';
 import { useSelectionStore } from '@/store/selectionStore';
 import { MM_TO_PX, pxToMm } from '@/utils/units';
-import type { TextEl } from '@/types/document';
+import { nextId } from '@/utils/id';
+import type { ImageEl, TextEl } from '@/types/document';
 
 export default function Canvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -33,6 +34,8 @@ export default function Canvas() {
   const currentPageId = useDocumentStore((s) => s.currentPageId);
   const updateElement = useDocumentStore((s) => s.updateElement);
   const removeElements = useDocumentStore((s) => s.removeElements);
+  const addElement = useDocumentStore((s) => s.addElement);
+  const select = useSelectionStore((s) => s.select);
   const page = pages.find((p) => p.id === currentPageId) ?? pages[0];
 
   const editingEl = editingId
@@ -47,6 +50,10 @@ export default function Canvas() {
   // marquee selection
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const marqueeRef = useRef<typeof marquee>(null);
+
+  // imagen: ref al input oculto y posición pendiente en mm
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const pendingImagePosMm = useRef<{ x: number; y: number }>({ x: 20, y: 20 });
 
   // siguiente zIndex a asignar a un nuevo elemento
   const nextZIndex = useMemo(
@@ -176,10 +183,60 @@ export default function Canvas() {
     return p ?? null;
   }
 
+  function handleImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !page) return;
+    const src = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      const pos = pendingImagePosMm.current;
+      const naturalW = img.naturalWidth;
+      const naturalH = img.naturalHeight;
+      // Limitar a 100mm de ancho máximo, mantener proporción
+      const maxW = 100;
+      const scaleF = naturalW > 0 ? Math.min(1, maxW / (naturalW * 0.2646)) : 1;
+      const w = Math.max(5, naturalW * 0.2646 * scaleF);
+      const h = Math.max(5, naturalH * 0.2646 * scaleF);
+      const el: ImageEl = {
+        id: nextId('el'),
+        name: file.name.replace(/\.[^.]+$/, ''),
+        type: 'image',
+        x: pos.x,
+        y: pos.y,
+        width: w,
+        height: h,
+        rotation: 0,
+        visible: true,
+        locked: false,
+        zIndex: nextZIndex(),
+        src,
+        opacity: 1,
+      };
+      addElement(page.id, el);
+      select([el.id]);
+      setActiveTool('select');
+    };
+    img.src = src;
+    e.target.value = '';
+  }
+
   function onMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
     const isOnStage = e.target === e.target.getStage();
 
     if (!isHand) {
+      // herramienta imagen: abrir selector de archivo
+      if (activeTool === 'image') {
+        const stage = e.target.getStage();
+        const p = stage?.getPointerPosition();
+        if (p) {
+          pendingImagePosMm.current = {
+            x: pxToMm(p.x - offset.x, zoom),
+            y: pxToMm(p.y - offset.y, zoom),
+          };
+        }
+        imageInputRef.current?.click();
+        return;
+      }
       // herramientas de dibujo: iniciar draft y salir
       if (draw.onMouseDown(e)) return;
       if (activeTool === 'select') {
@@ -273,6 +330,13 @@ export default function Canvas() {
       className="h-full w-full relative overflow-hidden"
       style={{ background: 'var(--canvas)', cursor }}
     >
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageFileChange}
+      />
       {editingEl && (
         <TextEditorOverlay
           el={editingEl}
