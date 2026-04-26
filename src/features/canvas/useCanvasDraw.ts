@@ -8,13 +8,15 @@ import { nextId } from '@/utils/id';
 import type {
   CircleEl,
   ElementModel,
+  FlowableEl,
+  FrameEl,
   LineEl,
   PenEl,
   RectEl,
   TextEl,
 } from '@/types/document';
 
-export type DrawTool = 'rect' | 'circle' | 'line' | 'pen' | 'text';
+export type DrawTool = 'rect' | 'circle' | 'line' | 'pen' | 'text' | 'frame';
 
 export interface Draft {
   tool: DrawTool;
@@ -27,7 +29,7 @@ export interface Draft {
 }
 
 export function isDrawTool(t: Tool): t is DrawTool {
-  return t === 'rect' || t === 'circle' || t === 'line' || t === 'pen' || t === 'text';
+  return t === 'rect' || t === 'circle' || t === 'line' || t === 'pen' || t === 'text' || t === 'frame';
 }
 
 interface Args {
@@ -103,6 +105,20 @@ export function useCanvasDraw({ offsetX, offsetY, zoom, pageId, nextZIndex }: Ar
     if (!draft) return false;
     const count = doc.pages.flatMap((p) => p.elements).filter((e) => e.type === draft.tool).length;
     const name = `${draft.tool}${count + 1}`;
+
+    if (draft.tool === 'frame') {
+      const frame = draftToFrame(draft, nextZIndex(), name);
+      if (frame) {
+        addElement(pageId, frame);
+        const flowable = draftToFlowable(frame, nextZIndex() + 1, count + 1);
+        addElement(pageId, flowable);
+        select([frame.id]);
+        if (autoReturn) setTool('select');
+      }
+      setDraft(null);
+      return true;
+    }
+
     const el = draftToElement(draft, nextZIndex(), name);
     if (el) {
       addElement(pageId, el);
@@ -257,4 +273,49 @@ function draftToElement(d: Draft, zIndex: number, name: string): ElementModel | 
   }
 
   return null;
+}
+
+function draftToFrame(d: Draft, zIndex: number, name: string): FrameEl | null {
+  const { x, y, w, h } = bboxFromTwoPoints(d.startMm, d.currentMm);
+  if (w < 2 && h < 2) return null;
+  return {
+    id: nextId('el'),
+    name,
+    type: 'frame',
+    x,
+    y,
+    width: Math.max(2, w),
+    height: Math.max(2, h),
+    rotation: 0,
+    visible: true,
+    locked: false,
+    zIndex,
+    fill: 'transparent',
+    stroke: '#2563eb',
+    strokeWidth: 0.4,
+    cornerRadius: 0,
+    padding: { top: 2, right: 2, bottom: 2, left: 2 },
+  };
+}
+
+function draftToFlowable(frame: FrameEl, zIndex: number, count: number): FlowableEl {
+  const pad = frame.padding;
+  return {
+    id: nextId('el'),
+    name: `sub-área${count}`,
+    type: 'flowable',
+    frameId: frame.id,
+    x: frame.x + pad.left,
+    y: frame.y + pad.top,
+    width: Math.max(1, frame.width - pad.left - pad.right),
+    height: Math.max(1, frame.height - pad.top - pad.bottom),
+    rotation: 0,
+    visible: true,
+    locked: false,
+    zIndex,
+    fill: 'rgba(37,99,235,0.06)',
+    stroke: '#93c5fd',
+    strokeWidth: 0.3,
+    flowType: 'content',
+  };
 }

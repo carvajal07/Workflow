@@ -9,7 +9,9 @@ export type ElementType =
   | 'image'
   | 'table'
   | 'qr'
-  | 'dataField';
+  | 'dataField'
+  | 'frame'
+  | 'flowable';
 
 export interface BaseEl {
   id: string;
@@ -112,6 +114,24 @@ export interface DataFieldEl extends BaseEl {
   color: string;
 }
 
+export interface FrameEl extends BaseEl {
+  type: 'frame';
+  fill: string;
+  stroke: string;
+  strokeWidth: number;
+  cornerRadius: number;
+  padding: { top: number; right: number; bottom: number; left: number };
+}
+
+export interface FlowableEl extends BaseEl {
+  type: 'flowable';
+  frameId: string;
+  fill: string;
+  stroke: string;
+  strokeWidth: number;
+  flowType: 'content' | 'paragraph' | 'spacer' | 'table' | 'image';
+}
+
 export type ElementModel =
   | TextEl
   | RectEl
@@ -121,7 +141,9 @@ export type ElementModel =
   | ImageEl
   | TableEl
   | QrEl
-  | DataFieldEl;
+  | DataFieldEl
+  | FrameEl
+  | FlowableEl;
 
 export interface Page {
   id: string;

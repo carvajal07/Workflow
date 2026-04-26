@@ -19,6 +19,26 @@ const DASH = [4, 4];
 export default function DraftOverlay({ draft, zoom, offsetX, offsetY }: Props) {
   const s = MM_TO_PX * zoom;
 
+  if (draft.tool === 'frame') {
+    const x = Math.min(draft.startMm.x, draft.currentMm.x);
+    const y = Math.min(draft.startMm.y, draft.currentMm.y);
+    const w = Math.abs(draft.currentMm.x - draft.startMm.x);
+    const h = Math.abs(draft.currentMm.y - draft.startMm.y);
+    return (
+      <Rect
+        x={offsetX + x * s}
+        y={offsetY + y * s}
+        width={w * s}
+        height={h * s}
+        fill="rgba(37,99,235,0.06)"
+        stroke="#2563eb"
+        strokeWidth={1.5}
+        dash={[6, 3]}
+        listening={false}
+      />
+    );
+  }
+
   if (draft.tool === 'rect' || draft.tool === 'circle' || draft.tool === 'text') {
     const end = applyConstrainIfNeeded(draft);
     const x = Math.min(draft.startMm.x, end.x);

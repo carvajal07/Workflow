@@ -8,6 +8,7 @@ import {
   Grid3x3,
   Magnet,
   Circle,
+  FilePlus,
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useDocumentStore } from '@/store/documentStore';
@@ -29,6 +30,7 @@ export default function StatusBar() {
   const pages = useDocumentStore((s) => s.doc.pages);
   const currentPageId = useDocumentStore((s) => s.currentPageId);
   const setCurrentPage = useDocumentStore((s) => s.setCurrentPage);
+  const addPage = useDocumentStore((s) => s.addPage);
   const idx = Math.max(0, pages.findIndex((p) => p.id === currentPageId));
   const page = pages[idx] ?? pages[0];
   const lastSaved = useDocumentStore((s) => s.lastSavedAt);
@@ -89,6 +91,15 @@ export default function StatusBar() {
         onClick={() => pages[pages.length - 1] && setCurrentPage(pages[pages.length - 1].id)}
       >
         <SkipForward size={12} />
+      </button>
+      <button
+        type="button"
+        className="w-5 h-5 rounded-3 hover:bg-bg-3 text-ink-2 flex items-center justify-center"
+        onClick={addPage}
+        aria-label="Nueva hoja"
+        title="Nueva hoja"
+      >
+        <FilePlus size={12} />
       </button>
 
       <Sep />

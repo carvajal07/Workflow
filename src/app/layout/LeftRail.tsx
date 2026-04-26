@@ -9,6 +9,7 @@ import {
   Image,
   Table2,
   QrCode,
+  LayoutTemplate,
 } from 'lucide-react';
 import { useToolStore, type Tool } from '@/store/toolStore';
 
@@ -34,6 +35,11 @@ const groups: { items: { icon: typeof Square; tool: Tool; label: string; shortcu
         { icon: Image, tool: 'image', label: 'Imagen', shortcut: 'I' },
         { icon: Table2, tool: 'table', label: 'Tabla', shortcut: '' },
         { icon: QrCode, tool: 'qr', label: 'QR', shortcut: '' },
+      ],
+    },
+    {
+      items: [
+        { icon: LayoutTemplate, tool: 'frame', label: 'Área (Frame)', shortcut: 'F' },
       ],
     },
   ];
