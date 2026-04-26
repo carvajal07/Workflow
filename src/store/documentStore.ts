@@ -55,6 +55,7 @@ interface DocumentState {
   setCurrentPage: (pageId: string) => void;
   addPage: () => void;
   removePage: (pageId: string) => void;
+  updatePage: (pageId: string, patch: Partial<Page>) => void;
 
   addElement: (pageId: string, el: ElementModel) => void;
   updateElement: (id: string, patch: Partial<ElementModel>) => void;
@@ -110,6 +111,18 @@ export const useDocumentStore = create<DocumentState>()(
             dirty: true,
           };
         }),
+
+      updatePage: (pageId, patch) =>
+        set((s) => ({
+          doc: {
+            ...s.doc,
+            pages: s.doc.pages.map((p) =>
+              p.id === pageId ? { ...p, ...patch } : p,
+            ),
+            updatedAt: new Date().toISOString(),
+          },
+          dirty: true,
+        })),
 
       addElement: (pageId, el) =>
         set((s) => ({

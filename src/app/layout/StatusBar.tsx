@@ -9,6 +9,7 @@ import {
   Magnet,
   Circle,
   FilePlus,
+  Trash2,
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useDocumentStore } from '@/store/documentStore';
@@ -31,6 +32,7 @@ export default function StatusBar() {
   const currentPageId = useDocumentStore((s) => s.currentPageId);
   const setCurrentPage = useDocumentStore((s) => s.setCurrentPage);
   const addPage = useDocumentStore((s) => s.addPage);
+  const removePage = useDocumentStore((s) => s.removePage);
   const idx = Math.max(0, pages.findIndex((p) => p.id === currentPageId));
   const page = pages[idx] ?? pages[0];
   const lastSaved = useDocumentStore((s) => s.lastSavedAt);
@@ -100,6 +102,17 @@ export default function StatusBar() {
         title="Nueva hoja"
       >
         <FilePlus size={12} />
+      </button>
+      <button
+        type="button"
+        className="w-5 h-5 rounded-3 hover:bg-bg-3 flex items-center justify-center disabled:opacity-30"
+        style={{ color: pages.length > 1 ? 'var(--ink-2)' : undefined }}
+        onClick={() => pages.length > 1 && removePage(currentPageId)}
+        disabled={pages.length <= 1}
+        aria-label="Eliminar hoja"
+        title="Eliminar hoja"
+      >
+        <Trash2 size={12} />
       </button>
 
       <Sep />
