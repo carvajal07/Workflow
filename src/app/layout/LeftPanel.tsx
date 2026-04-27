@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Layers, Palette } from 'lucide-react';
+import { Database, Layers, Palette } from 'lucide-react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import LayoutTree from '@/features/tree/LayoutTree';
 import Inspector from '@/features/properties/Inspector';
 import StylesPanel from '@/features/styles/StylesPanel';
+import DataPanel from '@/features/data/DataPanel';
 
-type Tab = 'layers' | 'styles';
+type Tab = 'layers' | 'styles' | 'data';
 
 export default function LeftPanel() {
   const [tab, setTab] = useState<Tab>('layers');
@@ -28,6 +29,12 @@ export default function LeftPanel() {
           icon={Palette}
           label="Estilos"
           onClick={() => setTab('styles')}
+        />
+        <TabBtn
+          active={tab === 'data'}
+          icon={Database}
+          label="Datos"
+          onClick={() => setTab('data')}
         />
       </div>
 
@@ -59,6 +66,15 @@ export default function LeftPanel() {
           <SectionHeader title="Estilos" />
           <div className="flex-1 min-h-0">
             <StylesPanel />
+          </div>
+        </div>
+      )}
+
+      {tab === 'data' && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <SectionHeader title="Datos" />
+          <div className="flex-1 min-h-0">
+            <DataPanel />
           </div>
         </div>
       )}

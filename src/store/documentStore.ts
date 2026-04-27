@@ -54,6 +54,11 @@ interface DocumentState {
   dirty: boolean;
   lastSavedAt: string | null;
 
+  /** JSON externo cargado como fuente de datos variable (fuera del historial undo). */
+  jsonData: unknown | null;
+  jsonFileName: string | null;
+  setJsonData: (data: unknown | null, fileName?: string) => void;
+
   setDoc: (d: DocumentModel) => void;
   setCurrentPage: (pageId: string) => void;
   addPage: () => void;
@@ -79,6 +84,9 @@ export const useDocumentStore = create<DocumentState>()(
       currentPageId: '',
       dirty: false,
       lastSavedAt: null,
+      jsonData: null,
+      jsonFileName: null,
+      setJsonData: (data, fileName) => set({ jsonData: data, jsonFileName: fileName ?? null }),
 
       setDoc: (d) => set({ doc: d, currentPageId: d.pages[0]?.id ?? '', dirty: false }),
       setCurrentPage: (pageId) => set({ currentPageId: pageId }),
