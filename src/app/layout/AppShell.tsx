@@ -5,6 +5,7 @@ import StatusBar from './StatusBar';
 import LeftRail from './LeftRail';
 import LeftPanel from './LeftPanel';
 import Canvas from '@/features/canvas/Canvas';
+import PdfPreviewModal from '@/features/canvas/PdfPreviewModal';
 import { useUIStore } from '@/store/uiStore';
 
 /**
@@ -65,6 +66,8 @@ export default function AppShell() {
           <StatusBar />
         </div>
       )}
+
+      <PdfPreviewModal />
     </div>
   );
 }

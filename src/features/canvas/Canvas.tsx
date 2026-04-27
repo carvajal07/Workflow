@@ -4,6 +4,7 @@ import type Konva from 'konva';
 import Sheet from './Sheet';
 import Rulers, { RULER_SIZE_PX } from './Rulers';
 import ElementsLayer from './ElementsLayer';
+import GuidesLayer from './GuidesLayer';
 import DraftOverlay from './DraftOverlay';
 import SelectionTransformer from './SelectionTransformer';
 import TextEditorOverlay from './TextEditorOverlay';
@@ -24,6 +25,7 @@ export default function Canvas() {
   const zoom = useUIStore((s) => s.zoom);
   const setZoom = useUIStore((s) => s.setZoom);
   const setCursor = useUIStore((s) => s.setCursor);
+  const showGrid = useUIStore((s) => s.showGrid);
   const activeTool = useToolStore((s) => s.active);
   const setActiveTool = useToolStore((s) => s.setActive);
   const clearSelection = useSelectionStore((s) => s.clear);
@@ -370,6 +372,14 @@ export default function Canvas() {
           {page && <Sheet page={page} zoom={zoom} offsetX={offset.x} offsetY={offset.y} />}
           {page && (
             <ElementsLayer
+              page={page}
+              zoom={zoom}
+              offsetX={offset.x}
+              offsetY={offset.y}
+            />
+          )}
+          {page && showGrid && (
+            <GuidesLayer
               page={page}
               zoom={zoom}
               offsetX={offset.x}

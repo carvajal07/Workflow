@@ -4,6 +4,7 @@ import { useDocumentHistory, useDocumentStore } from '@/store/documentStore';
 import { serializeToXml } from '@/xml/serialize';
 import { deserializeFromXml } from '@/xml/deserialize';
 import { downloadBlob } from '@/api/export';
+import { useUIStore } from '@/store/uiStore';
 
 const OTHER_MENUS = ['Editar', 'Ver', 'Insertar', 'Formato', 'Datos', 'Ayuda'];
 
@@ -11,6 +12,7 @@ export default function MenuBar() {
   const history = useDocumentHistory();
   const doc = useDocumentStore((s) => s.doc);
   const setDoc = useDocumentStore((s) => s.setDoc);
+  const setPreviewOpen = useUIStore((s) => s.setPreviewOpen);
 
   const [archivoOpen, setArchivoOpen] = useState(false);
   const archivoRef = useRef<HTMLDivElement>(null);
@@ -149,6 +151,7 @@ export default function MenuBar() {
           className="h-[24px] px-3 rounded-3 flex items-center gap-1.5 font-semibold"
           style={{ background: 'var(--accent)', color: '#0b1a10' }}
           type="button"
+          onClick={() => setPreviewOpen(true)}
         >
           <FileDown size={13} />
           Exportar PDF

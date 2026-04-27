@@ -14,6 +14,7 @@ interface UIState {
   showGrid: boolean;
   showSnap: boolean;
   cursor: { x: number; y: number };
+  previewOpen: boolean;
 
   setTheme: (t: 'dark' | 'light') => void;
   togglePanel: (key: keyof Panels) => void;
@@ -21,6 +22,7 @@ interface UIState {
   toggleGrid: () => void;
   toggleSnap: () => void;
   setCursor: (x: number, y: number) => void;
+  setPreviewOpen: (v: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -30,7 +32,9 @@ export const useUIStore = create<UIState>((set) => ({
   showGrid: false,
   showSnap: true,
   cursor: { x: 0, y: 0 },
+  previewOpen: false,
 
+  setPreviewOpen: (v) => set({ previewOpen: v }),
   setTheme: (t) => {
     set({ theme: t });
     const root = document.documentElement;

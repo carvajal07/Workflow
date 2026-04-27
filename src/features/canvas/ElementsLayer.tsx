@@ -19,33 +19,41 @@ interface Props {
   zoom: number;
   offsetX: number;
   offsetY: number;
+  /** Modo vista previa: sin arrastre ni selección (para el modal PDF). */
+  preview?: boolean;
 }
 
 /**
  * Capa de elementos posicionada en el offset de la hoja.
  * Los elementos guardan sus coordenadas en mm (modelo), aquí se convierten a px.
  */
-export default function ElementsLayer({ page, zoom, offsetX, offsetY }: Props) {
+export default function ElementsLayer({ page, zoom, offsetX, offsetY, preview = false }: Props) {
   const updateElement = useDocumentStore((s) => s.updateElement);
   const select = useSelectionStore((s) => s.select);
   const toggle = useSelectionStore((s) => s.toggle);
   const editingId = useSelectionStore((s) => s.editingId);
   const setEditing = useSelectionStore((s) => s.setEditing);
   const activeTool = useToolStore((s) => s.active);
-  const draggable = activeTool === 'select';
+  const draggable = !preview && activeTool === 'select';
 
   function handleSelect(id: string, additive: boolean) {
-    if (activeTool !== 'select') return;
+    if (preview || activeTool !== 'select') return;
     if (additive) toggle(id);
     else select([id]);
   }
+
+  const onUpdate = preview
+    ? (_id: string, _patch: Partial<ElementModel>) => {}
+    : (id: string, patch: Partial<ElementModel>) => updateElement(id, patch);
+  const onEdit = preview ? (_id: string) => {} : (id: string) => setEditing(id);
+  const activeEditId = preview ? null : editingId;
 
   const elements = [...page.elements].sort((a, b) => a.zIndex - b.zIndex);
 
   return (
     <Group x={offsetX} y={offsetY}>
       {elements.map((el) =>
-        renderElement(el, zoom, handleSelect, updateElement, draggable, editingId, setEditing),
+        renderElement(el, zoom, handleSelect, onUpdate, draggable, activeEditId, onEdit),
       )}
     </Group>
   );
@@ -58,7 +66,7 @@ function renderElement(
   onUpdate: (id: string, patch: Partial<ElementModel>) => void,
   draggable: boolean,
   editingId: string | null,
-  setEditing: (id: string | null) => void,
+  onEdit: (id: string) => void,
 ) {
   const key = el.id;
   switch (el.type) {
@@ -104,7 +112,7 @@ function renderElement(
           zoom={zoom}
           onSelect={onSelect}
           onChange={(p) => onUpdate(el.id, p)}
-          onEdit={() => setEditing(el.id)}
+          onEdit={() => onEdit(el.id)}
           draggable={draggable}
           isEditing={editingId === el.id}
         />
