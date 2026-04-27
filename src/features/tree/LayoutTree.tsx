@@ -11,6 +11,7 @@ import {
   LayoutTemplate,
   Layers,
   Minus,
+  Plus,
   QrCode,
   Square,
   Table2,
@@ -20,16 +21,24 @@ import {
 import { useDocumentStore } from '@/store/documentStore';
 import { useSelectionStore } from '@/store/selectionStore';
 import type { DocumentModel, ElementModel } from '@/types/document';
+import type { StyleKey } from '@/store/documentStore';
+import StyleEditorModal, { type StyleEditorTarget } from '@/features/styles/StyleEditorModal';
 
 interface TreeNode {
   id: string;
   name: string;
-  kind: 'group' | 'page' | 'element' | 'asset' | 'variable';
+  kind: 'group' | 'page' | 'element' | 'asset' | 'variable' | 'style';
   elementType?: ElementModel['type'];
   elementId?: string;
   pageId?: string;
   children?: TreeNode[];
+  /** Si es un grupo de estilos, indica qué tipo gestiona (habilita botón "+"). */
+  styleKey?: StyleKey;
+  /** Si es un nodo de estilo individual, su ID en el store. */
+  styleId?: string;
 }
+
+/* ─── Contextos ─── */
 
 interface RenameCtx {
   renamingId: string | null;
@@ -47,13 +56,20 @@ const RenameContext = createContext<RenameCtx>({
   cancelRename: () => {},
 });
 
+interface StyleCtx {
+  openStyleEditor: (target: StyleEditorTarget) => void;
+}
+
+const StyleContext = createContext<StyleCtx>({ openStyleEditor: () => {} });
+
 /**
- * LayoutTree con react-arborist. Refleja el documento real (pages,
- * elements, assets) y propaga clicks a los stores:
- *  - Click en un elemento → selecciona en el canvas (selectionStore) y
- *    cambia la página activa a la que lo contiene.
- *  - Click en una página → la vuelve la página activa.
- *  - Doble-click en nombre de elemento → edición inline del nombre.
+ * LayoutTree con react-arborist.
+ * - Click en elemento → selecciona en canvas y cambia página.
+ * - Click en página → la vuelve activa.
+ * - Doble-click en nombre → edición inline.
+ * - Imágenes del canvas aparecen también en la carpeta "Imágenes".
+ * - Grupos de estilos tienen botón "+" para crear nuevos estilos.
+ * - Click en estilo existente abre modal de edición.
  */
 export default function LayoutTree() {
   const doc = useDocumentStore((s) => s.doc);
@@ -66,6 +82,8 @@ export default function LayoutTree() {
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renamingKind, setRenamingKind] = useState<'element' | 'page' | null>(null);
+
+  const [styleEditor, setStyleEditor] = useState<StyleEditorTarget | null>(null);
 
   const data = useMemo(() => buildTree(doc), [doc]);
 
@@ -93,6 +111,13 @@ export default function LayoutTree() {
   }, [selectedIds]);
 
   function onSelect(nodes: NodeApi<TreeNode>[]) {
+    // Nodos de estilo → abrir editor
+    const styleNode = nodes.find((n) => n.data.kind === 'style' && n.data.styleKey && n.data.styleId);
+    if (styleNode) {
+      openStyleEditor(styleNode.data.styleKey!, styleNode.data.styleId!);
+      return;
+    }
+
     const elementIds = nodes
       .filter((n) => n.data.kind === 'element' && n.data.elementId)
       .map((n) => n.data.elementId!);
@@ -110,6 +135,13 @@ export default function LayoutTree() {
       const current = useSelectionStore.getState().selectedIds;
       if (current.length > 0) setSelection([]);
     }
+  }
+
+  function openStyleEditor(key: StyleKey, id: string) {
+    const items = doc.assets[key] as { id: string; name: string }[];
+    const found = items.find((i) => i.id === id);
+    if (!found) return;
+    setStyleEditor({ key, item: found } as StyleEditorTarget);
   }
 
   const renameCtx: RenameCtx = {
@@ -135,33 +167,49 @@ export default function LayoutTree() {
     },
   };
 
+  const styleCtx: StyleCtx = {
+    openStyleEditor: (target) => setStyleEditor(target),
+  };
+
   return (
     <RenameContext.Provider value={renameCtx}>
-      <div ref={containerRef} className="h-full w-full overflow-hidden">
-        <Tree<TreeNode>
-          ref={treeRef}
-          data={data}
-          width={size.w}
-          height={size.h}
-          rowHeight={22}
-          indent={14}
-          openByDefault={false}
-          disableDrag
-          disableDrop
-          onSelect={onSelect}
-        >
-          {Node}
-        </Tree>
-      </div>
+      <StyleContext.Provider value={styleCtx}>
+        <div ref={containerRef} className="h-full w-full overflow-hidden">
+          <Tree<TreeNode>
+            ref={treeRef}
+            data={data}
+            width={size.w}
+            height={size.h}
+            rowHeight={22}
+            indent={14}
+            openByDefault={false}
+            disableDrag
+            disableDrop
+            onSelect={onSelect}
+          >
+            {Node}
+          </Tree>
+        </div>
+
+        {styleEditor && (
+          <StyleEditorModal
+            target={styleEditor}
+            onClose={() => setStyleEditor(null)}
+          />
+        )}
+      </StyleContext.Provider>
     </RenameContext.Provider>
   );
 }
+
+/* ─── Nodo del árbol ─── */
 
 function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   const d = node.data;
   const hasChildren = (d.children?.length ?? 0) > 0;
   const Icon = iconFor(d);
   const { renamingId, startRename, commitRename, cancelRename } = useContext(RenameContext);
+  const { openStyleEditor } = useContext(StyleContext);
 
   const isRenamingEl = d.kind === 'element' && d.elementId != null && renamingId === d.elementId;
   const isRenamingPage = d.kind === 'page' && d.pageId != null && renamingId === d.pageId;
@@ -181,7 +229,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
     <div
       ref={dragHandle}
       style={style}
-      className="flex items-center h-[22px] text-11 select-none cursor-default hover:bg-bg-3"
+      className="flex items-center h-[22px] text-11 select-none cursor-default hover:bg-bg-3 group"
       onClick={() => {
         if (hasChildren && !isRenaming) node.toggle();
       }}
@@ -234,44 +282,54 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
         </span>
       )}
 
-      {hasChildren && !isRenaming && (
+      {/* Botón "+" visible en hover para grupos de estilos */}
+      {d.kind === 'group' && d.styleKey && !isRenaming && (
+        <button
+          type="button"
+          title={`Nuevo ${d.name.toLowerCase()}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            openStyleEditor({ key: d.styleKey!, item: null } as StyleEditorTarget);
+          }}
+          className="w-5 h-5 flex items-center justify-center rounded hover:bg-bg-4 text-muted opacity-0 group-hover:opacity-100 transition-opacity mr-1"
+        >
+          <Plus size={11} />
+        </button>
+      )}
+
+      {/* Contador de hijos (solo cuando no hay botón "+") */}
+      {hasChildren && !isRenaming && !d.styleKey && (
         <span className="font-mono text-[10px] text-muted px-2">{d.children!.length}</span>
       )}
     </div>
   );
 }
 
+/* ─── Iconos ─── */
+
 function iconFor(n: TreeNode) {
   if (n.kind === 'element' && n.elementType) {
     switch (n.elementType) {
-      case 'text':
-        return Type;
-      case 'rect':
-        return Square;
-      case 'circle':
-        return Circle;
-      case 'line':
-        return Minus;
-      case 'pen':
-        return Edit3;
-      case 'image':
-        return ImageIcon;
-      case 'table':
-        return Table2;
-      case 'qr':
-        return QrCode;
-      case 'dataField':
-        return Variable;
-      case 'frame':
-        return LayoutTemplate;
-      case 'flowable':
-        return Layers;
+      case 'text': return Type;
+      case 'rect': return Square;
+      case 'circle': return Circle;
+      case 'line': return Minus;
+      case 'pen': return Edit3;
+      case 'image': return ImageIcon;
+      case 'table': return Table2;
+      case 'qr': return QrCode;
+      case 'dataField': return Variable;
+      case 'frame': return LayoutTemplate;
+      case 'flowable': return Layers;
     }
   }
   if (n.kind === 'page') return FileText;
   if (n.kind === 'variable') return Variable;
+  if (n.kind === 'style') return Folder;
   return Folder;
 }
+
+/* ─── Labels ─── */
 
 const TYPE_LABELS: Record<string, string> = {
   text: 'Texto',
@@ -287,26 +345,56 @@ const TYPE_LABELS: Record<string, string> = {
   flowable: 'Sub-área',
 };
 
+/* ─── buildTree ─── */
+
 function buildTree(doc: DocumentModel): TreeNode[] {
   const a = doc.assets;
-  const elementNode = (e: ElementModel): TreeNode => ({
+
+  const elementNode = (e: ElementModel, pageId?: string): TreeNode => ({
     id: `el:${e.id}`,
     name: e.name ?? (TYPE_LABELS[e.type] ?? e.type),
     kind: 'element',
     elementType: e.type,
     elementId: e.id,
+    pageId,
   });
-  const group = (id: string, name: string, children: TreeNode[]): TreeNode => ({
+
+  const group = (id: string, name: string, children: TreeNode[], styleKey?: StyleKey): TreeNode => ({
     id,
     name,
     kind: 'group',
     children,
+    styleKey,
   });
+
   const assetNodes = (
     prefix: string,
     items: { id: string; name: string }[],
   ): TreeNode[] =>
     items.map((i) => ({ id: `${prefix}:${i.id}`, name: i.name, kind: 'asset' }));
+
+  const styleNodes = (key: StyleKey, items: { id: string; name: string }[]): TreeNode[] =>
+    items.map((i) => ({
+      id: `${key}:${i.id}`,
+      name: i.name,
+      kind: 'style',
+      styleKey: key,
+      styleId: i.id,
+    }));
+
+  // Imágenes del canvas (elementos image en cualquier página)
+  const imageElements: TreeNode[] = doc.pages.flatMap((p) =>
+    p.elements
+      .filter((e) => e.type === 'image')
+      .map((e) => ({
+        id: `imgfolder:${e.id}`,
+        name: e.name ?? 'Imagen',
+        kind: 'element' as const,
+        elementType: 'image' as const,
+        elementId: e.id,
+        pageId: p.id,
+      })),
+  );
 
   return [
     group('g:data', 'Datos', [
@@ -334,25 +422,30 @@ function buildTree(doc: DocumentModel): TreeNode[] {
                   (f) => f.type === 'flowable' && (f as { frameId?: string }).frameId === e.id,
                 );
                 return {
-                  ...elementNode(e),
-                  children: flowables.map(elementNode),
+                  ...elementNode(e, p.id),
+                  children: flowables.map((f) => elementNode(f, p.id)),
                 };
               }
-              return elementNode(e);
+              return elementNode(e, p.id);
             }),
         }),
       ),
     ),
-    group('g:elements', 'Elementos', doc.pages.flatMap((p) => p.elements.filter((e) => e.type !== 'flowable').map(elementNode))),
+    group('g:elements', 'Elementos', doc.pages.flatMap((p) =>
+      p.elements.filter((e) => e.type !== 'flowable').map((e) => elementNode(e, p.id)),
+    )),
     group('g:flows', 'Flujos', assetNodes('flow', doc.flows)),
-    group('g:paraStyles', 'Estilos de párrafo', assetNodes('ps', a.paragraphStyles)),
-    group('g:textStyles', 'Estilos de texto', assetNodes('ts', a.textStyles)),
+    group('g:paraStyles', 'Estilos de párrafo', styleNodes('paragraphStyles', a.paragraphStyles), 'paragraphStyles'),
+    group('g:textStyles', 'Estilos de texto', styleNodes('textStyles', a.textStyles), 'textStyles'),
     group('g:fonts', 'Fuentes', assetNodes('font', a.fonts)),
-    group('g:borderStyles', 'Estilos de borde', assetNodes('bs', a.borderStyles)),
-    group('g:lineStyles', 'Estilos de línea', assetNodes('ls', a.lineStyles)),
-    group('g:fillStyles', 'Estilos de relleno', assetNodes('fs', a.fillStyles)),
+    group('g:borderStyles', 'Estilos de borde', styleNodes('borderStyles', a.borderStyles), 'borderStyles'),
+    group('g:lineStyles', 'Estilos de línea', styleNodes('lineStyles', a.lineStyles), 'lineStyles'),
+    group('g:fillStyles', 'Estilos de relleno', styleNodes('fillStyles', a.fillStyles), 'fillStyles'),
     group('g:colors', 'Colores', assetNodes('color', a.colors)),
-    group('g:images', 'Imágenes', assetNodes('img', a.images)),
+    group('g:images', 'Imágenes', [
+      ...assetNodes('img', a.images),
+      ...imageElements,
+    ]),
     group('g:tables', 'Tablas', assetNodes('tbl', a.tables)),
     group('g:rowSets', 'Filas', assetNodes('rs', a.rowSets)),
     group('g:cells', 'Celdas', assetNodes('cell', a.cells)),

@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import { temporal } from 'zundo';
-import type { DocumentModel, ElementModel, Page } from '@/types/document';
+import type { DocumentModel, ElementModel, Page, TextStyle, ParagraphStyle, BorderStyle, LineStyle, FillStyle } from '@/types/document';
 import { nextId } from '@/utils/id';
+
+export type StyleKey = 'textStyles' | 'paragraphStyles' | 'borderStyles' | 'lineStyles' | 'fillStyles';
+export type AnyStyleItem = TextStyle | ParagraphStyle | BorderStyle | LineStyle | FillStyle;
 
 function emptyDocument(): DocumentModel {
   const now = new Date().toISOString();
@@ -61,6 +64,10 @@ interface DocumentState {
   updateElement: (id: string, patch: Partial<ElementModel>) => void;
   removeElement: (id: string) => void;
   removeElements: (ids: string[]) => void;
+
+  addStyle: (key: StyleKey, item: AnyStyleItem) => void;
+  updateStyle: (key: StyleKey, id: string, patch: Partial<AnyStyleItem>) => void;
+  removeStyle: (key: StyleKey, id: string) => void;
 
   markSaved: () => void;
 }
@@ -179,6 +186,44 @@ export const useDocumentStore = create<DocumentState>()(
             dirty: true,
           };
         }),
+
+      addStyle: (key, item) =>
+        set((s) => ({
+          doc: {
+            ...s.doc,
+            assets: { ...s.doc.assets, [key]: [...(s.doc.assets[key] as AnyStyleItem[]), item] },
+            updatedAt: new Date().toISOString(),
+          },
+          dirty: true,
+        })),
+
+      updateStyle: (key, id, patch) =>
+        set((s) => ({
+          doc: {
+            ...s.doc,
+            assets: {
+              ...s.doc.assets,
+              [key]: (s.doc.assets[key] as AnyStyleItem[]).map((it) =>
+                it.id === id ? { ...it, ...patch } : it,
+              ),
+            },
+            updatedAt: new Date().toISOString(),
+          },
+          dirty: true,
+        })),
+
+      removeStyle: (key, id) =>
+        set((s) => ({
+          doc: {
+            ...s.doc,
+            assets: {
+              ...s.doc.assets,
+              [key]: (s.doc.assets[key] as AnyStyleItem[]).filter((it) => it.id !== id),
+            },
+            updatedAt: new Date().toISOString(),
+          },
+          dirty: true,
+        })),
 
       markSaved: () => set({ dirty: false, lastSavedAt: new Date().toISOString() }),
     }),
