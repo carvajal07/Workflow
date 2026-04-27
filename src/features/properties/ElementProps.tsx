@@ -3,7 +3,7 @@ import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
 import { useDocumentStore } from '@/store/documentStore';
 import { useSelectionStore } from '@/store/selectionStore';
 import type { BaseEl, ElementModel } from '@/types/document';
-import { SectionTitle, NumberInput, round } from './shared';
+import { SectionTitle, round } from './shared';
 import ShapeProps from './props/ShapeProps';
 import TextProps from './props/TextProps';
 import ImageProps from './props/ImageProps';
@@ -17,11 +17,6 @@ import FlowableProps from './props/FlowableProps';
 type NumKey = 'x' | 'y' | 'width' | 'height' | 'rotation';
 type BoolKey = 'visible' | 'locked';
 
-/**
- * Panel de propiedades contextual. Muestra secciones base (posición,
- * estado) siempre, y una sección específica según el tipo del elemento.
- * Con multi-selección de tipos distintos, solo muestra la sección base.
- */
 export default function ElementProps() {
   const pages = useDocumentStore((s) => s.doc.pages);
   const updateElement = useDocumentStore((s) => s.updateElement);
@@ -37,11 +32,11 @@ export default function ElementProps() {
 
   const commonNum = (k: NumKey): number | undefined => {
     const first = selected[0][k];
-    return selected.every((e) => e[k] === first) ? first : undefined;
+    return selected.every((e) => e[k] === first) ? (first as number) : undefined;
   };
   const commonBool = (k: BoolKey): boolean | undefined => {
     const first = selected[0][k];
-    return selected.every((e) => e[k] === first) ? first : undefined;
+    return selected.every((e) => e[k] === first) ? (first as boolean) : undefined;
   };
   const applyNum = (k: NumKey, v: number) => {
     for (const el of selected) updateElement(el.id, { [k]: v } as Partial<BaseEl>);
@@ -55,27 +50,25 @@ export default function ElementProps() {
   const typeEl = allSameType ? selected[0] : null;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
 
       {/* ── Posición y tamaño ── */}
       <SectionTitle>Posición y tamaño</SectionTitle>
 
-      <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-        <NumberField label="X" unit="mm" value={commonNum('x')} onCommit={(v) => applyNum('x', v)} />
-        <NumberField label="Y" unit="mm" value={commonNum('y')} onCommit={(v) => applyNum('y', v)} />
-        <NumberField label="Ancho" unit="mm" min={0.5} value={commonNum('width')} onCommit={(v) => applyNum('width', v)} />
-        <NumberField label="Alto" unit="mm" min={0.5} value={commonNum('height')} onCommit={(v) => applyNum('height', v)} />
+      {/* Fila X / Y */}
+      <div className="grid grid-cols-2 gap-x-2">
+        <NumField label="X" unit="mm" value={commonNum('x')} onCommit={(v) => applyNum('x', v)} />
+        <NumField label="Y" unit="mm" value={commonNum('y')} onCommit={(v) => applyNum('y', v)} />
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="text-ink-2 shrink-0 text-[10px] w-[52px] text-right">Rotación</span>
-        <NumberInput
-          value={commonNum('rotation')}
-          onChange={(v) => applyNum('rotation', v)}
-          step={1}
-          unit="°"
-        />
+      {/* Fila Ancho / Alto */}
+      <div className="grid grid-cols-2 gap-x-2">
+        <NumField label="Ancho" unit="mm" min={0.5} value={commonNum('width')} onCommit={(v) => applyNum('width', v)} />
+        <NumField label="Alto" unit="mm" min={0.5} value={commonNum('height')} onCommit={(v) => applyNum('height', v)} />
       </div>
+
+      {/* Rotación — fila completa */}
+      <NumField label="Rotación" unit="°" step={1} value={commonNum('rotation')} onCommit={(v) => applyNum('rotation', v)} />
 
       {/* ── Propiedades específicas del tipo ── */}
       {singleEl && typeEl && renderTypeProps(typeEl)}
@@ -129,25 +122,33 @@ function renderTypeProps(el: ElementModel) {
   }
 }
 
-/* ─── Helpers locales ─── */
+/* ─── NumField: label encima, input abajo ─── */
 
-function NumberField({
-  label, unit, value, onCommit, step = 0.1, min,
-}: {
-  label: string; unit?: string; value: number | undefined;
-  onCommit: (v: number) => void; step?: number; min?: number;
-}) {
+interface NumFieldProps {
+  label: string;
+  unit?: string;
+  value: number | undefined;
+  onCommit: (v: number) => void;
+  step?: number;
+  min?: number;
+}
+
+function NumField({ label, unit, value, onCommit, step = 0.1, min }: NumFieldProps) {
   const display = value === undefined ? '' : round(value).toString();
   return (
-    <label className="flex items-center gap-2">
-      <span className="text-ink-2 w-10 text-[10px]">{label}</span>
-      <div className="h-[22px] flex items-center bg-bg-3 border border-line-2 rounded-3 px-1.5 flex-1">
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] text-muted leading-none">{label}</span>
+      <div
+        className="h-[26px] flex items-center rounded-3 px-2 gap-1 border"
+        style={{ background: 'var(--bg-2)', borderColor: 'var(--line-2)' }}
+      >
         <input
           type="number"
           step={step}
           {...(min !== undefined ? { min } : {})}
-          className="bg-transparent w-full text-right font-mono text-11 outline-none"
-          placeholder={value === undefined ? '—' : undefined}
+          className="bg-transparent flex-1 font-mono text-11 outline-none min-w-0"
+          style={{ color: 'var(--ink)' }}
+          placeholder="—"
           value={display}
           onChange={(e) => {
             const v = Number(e.target.value);
@@ -156,11 +157,17 @@ function NumberField({
             onCommit(v);
           }}
         />
-        {unit && <span className="text-muted text-[10px] ml-1">{unit}</span>}
+        {unit && (
+          <span className="text-[10px] shrink-0" style={{ color: 'var(--muted)' }}>
+            {unit}
+          </span>
+        )}
       </div>
-    </label>
+    </div>
   );
 }
+
+/* ─── ToggleBtn ─── */
 
 function ToggleBtn({
   label, icon: Icon, active, mixed, onClick,
@@ -171,13 +178,13 @@ function ToggleBtn({
     <button
       type="button"
       onClick={onClick}
-      className="h-[24px] px-2 flex items-center gap-1.5 rounded-3 border border-line-2 hover:bg-bg-3 flex-1"
+      className="h-[26px] px-2 flex items-center gap-1.5 rounded-3 border hover:bg-bg-3 flex-1"
       style={
         active
-          ? { background: 'var(--accent-soft)', color: 'var(--accent)' }
+          ? { background: 'var(--accent-soft)', color: 'var(--accent)', borderColor: 'var(--accent-dim)' }
           : mixed
-            ? { color: 'var(--muted)' }
-            : { color: 'var(--ink-2)' }
+            ? { color: 'var(--muted)', borderColor: 'var(--line-2)' }
+            : { color: 'var(--ink-2)', borderColor: 'var(--line-2)' }
       }
       title={mixed ? `${label} (valores mixtos)` : label}
     >
