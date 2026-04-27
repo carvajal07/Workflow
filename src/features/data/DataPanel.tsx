@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Database, RefreshCw, Upload, ChevronDown, ChevronRight, Link, Unlink } from 'lucide-react';
 import { useDocumentStore } from '@/store/documentStore';
 import { useSelectionStore } from '@/store/selectionStore';
+import { nextId } from '@/utils/id';
 import type { DataFieldEl } from '@/types/document';
 
 /* ─── Tipos de valor JSON ─── */
@@ -23,19 +24,20 @@ const TYPE_COLOR: Record<JsonType, { bg: string; text: string; label: string }> 
   array:   { bg: '#1e2a4a', text: '#818cf8', label: 'arr' },
 };
 
-/* ─── Nodo recursivo del árbol ─── */
+/* ─── Nodo recursivo del árbol (schema-only) ─── */
 
 interface NodeProps {
   keyName: string;
   value: unknown;
-  path: string;         // ruta dot-notation: "persona.nombre"
+  path: string;
   depth: number;
   usedPaths: Set<string>;
   selectedDataFieldId: string | null;
   onBind: (path: string) => void;
+  onCreate: (path: string) => void;
 }
 
-function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId, onBind }: NodeProps) {
+function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId, onBind, onCreate }: NodeProps) {
   const type = jsonType(value);
   const isExpandable = type === 'object' || type === 'array';
   const [open, setOpen] = useState(depth < 2);
@@ -43,32 +45,42 @@ function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId,
   const isUsed = usedPaths.has(path);
   const canBind = selectedDataFieldId !== null && !isExpandable;
 
-  const entries: [string, unknown][] = isExpandable
-    ? type === 'array'
-      ? (value as unknown[]).map((v, i) => [String(i), v])
-      : Object.entries(value as Record<string, unknown>)
-    : [];
+  /* Schema children — for arrays, use first element as schema sample */
+  const entries: [string, unknown][] = (() => {
+    if (!isExpandable) return [];
+    if (type === 'array') {
+      const arr = value as unknown[];
+      const first = arr[0];
+      if (first !== undefined && typeof first === 'object' && first !== null && !Array.isArray(first))
+        return Object.entries(first as Record<string, unknown>);
+      if (first !== undefined) return [['item', first]];
+      return [];
+    }
+    return Object.entries(value as Record<string, unknown>);
+  })();
 
   const { bg, text, label } = TYPE_COLOR[type];
-
-  const previewStr = !isExpandable
-    ? type === 'string'
-      ? `"${String(value).slice(0, 40)}${String(value).length > 40 ? '…' : ''}"`
-      : String(value)
-    : type === 'array'
-      ? `[${(value as unknown[]).length}]`
-      : `{${Object.keys(value as object).length}}`;
+  const arrayLen = type === 'array' ? (value as unknown[]).length : null;
 
   return (
     <div style={{ paddingLeft: depth === 0 ? 0 : 12 }}>
       <div
+        draggable
         className="flex items-center h-[24px] gap-1 px-1 rounded group cursor-default select-none hover:bg-bg-3"
         style={{ minWidth: 0 }}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/x-binding-path', path);
+          e.dataTransfer.effectAllowed = 'copy';
+        }}
         onClick={() => {
           if (isExpandable) setOpen((o) => !o);
           else if (canBind) onBind(path);
         }}
-        title={canBind ? `Vincular "${path}" al campo seleccionado` : path}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onCreate(path);
+        }}
+        title={canBind ? `Vincular "${path}" al campo seleccionado` : `Doble clic o arrastrar al lienzo para crear campo`}
       >
         {/* Expand chevron */}
         <span className="w-3 shrink-0 flex items-center justify-center text-muted">
@@ -85,21 +97,29 @@ function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId,
           {label}
         </span>
 
-        {/* Key */}
+        {/* Key name */}
         <span className="text-11 text-ink-2 shrink-0 font-mono">{keyName}</span>
 
-        {/* Preview valor */}
-        {!isExpandable && (
-          <span className="text-11 text-muted truncate font-mono ml-0.5 min-w-0">
-            {previewStr}
-          </span>
-        )}
-        {isExpandable && (
-          <span className="text-[10px] text-muted ml-0.5 shrink-0">{previewStr}</span>
+        {/* Array length */}
+        {arrayLen !== null && (
+          <span className="text-[10px] text-muted shrink-0 ml-0.5">[{arrayLen}]</span>
         )}
 
-        {/* Indicadores a la derecha */}
-        <span className="ml-auto flex items-center gap-1 shrink-0">
+        {/* Path as binding ID — shown for leaf nodes */}
+        {!isExpandable && path && (
+          <span
+            className="text-[9px] text-muted truncate font-mono ml-1 flex-1 min-w-0"
+            title={path}
+          >
+            {path}
+          </span>
+        )}
+
+        {/* Spacer for expandable nodes */}
+        {isExpandable && <span className="flex-1" />}
+
+        {/* Indicators */}
+        <span className="flex items-center gap-1 shrink-0">
           {isUsed && (
             <span title={`Vinculado en canvas (${path})`}>
               <Link size={10} style={{ color: 'var(--accent)' }} />
@@ -126,6 +146,7 @@ function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId,
               usedPaths={usedPaths}
               selectedDataFieldId={selectedDataFieldId}
               onBind={onBind}
+              onCreate={onCreate}
             />
           ))}
         </div>
@@ -137,13 +158,17 @@ function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId,
 /* ─── Panel principal ─── */
 
 export default function DataPanel() {
-  const jsonData     = useDocumentStore((s) => s.jsonData);
-  const jsonFileName = useDocumentStore((s) => s.jsonFileName);
-  const setJsonData  = useDocumentStore((s) => s.setJsonData);
-  const pages        = useDocumentStore((s) => s.doc.pages);
+  const jsonData      = useDocumentStore((s) => s.jsonData);
+  const jsonFileName  = useDocumentStore((s) => s.jsonFileName);
+  const setJsonData   = useDocumentStore((s) => s.setJsonData);
+  const pages         = useDocumentStore((s) => s.doc.pages);
+  const currentPageId = useDocumentStore((s) => s.currentPageId);
   const updateElement = useDocumentStore((s) => s.updateElement);
-  const selectedIds  = useSelectionStore((s) => s.selectedIds);
-  const fileRef      = useRef<HTMLInputElement>(null);
+  const addElement    = useDocumentStore((s) => s.addElement);
+  const selectedIds   = useSelectionStore((s) => s.selectedIds);
+  const fileRef       = useRef<HTMLInputElement>(null);
+
+  const page = pages.find((p) => p.id === currentPageId) ?? pages[0];
 
   /* Campo seleccionado (solo si es dataField único) */
   const selectedDataField: DataFieldEl | null = (() => {
@@ -184,14 +209,41 @@ export default function DataPanel() {
     }
   }
 
-  /* Normaliza: si el JSON es un array toma el primer elemento como muestra */
+  function handleCreate(path: string) {
+    if (!page) return;
+    const nextZ = page.elements.length > 0
+      ? Math.max(...page.elements.map((e) => e.zIndex)) + 1
+      : 1;
+    const name = path.split('.').pop() ?? path;
+    const el: DataFieldEl = {
+      id: nextId('el'),
+      type: 'dataField',
+      name,
+      x: 20,
+      y: 20,
+      width: 60,
+      height: 8,
+      rotation: 0,
+      visible: true,
+      locked: false,
+      zIndex: nextZ,
+      binding: path,
+      fallback: '',
+      fontFamily: 'Helvetica',
+      fontSize: 12,
+      color: '#000000',
+    };
+    addElement(page.id, el);
+  }
+
+  /* Normaliza: si el JSON es un array toma el primer elemento como muestra de schema */
   const rootEntries: [string, unknown][] = (() => {
     if (jsonData === null) return [];
     if (Array.isArray(jsonData)) {
       const first = (jsonData as unknown[])[0];
       if (first && typeof first === 'object' && !Array.isArray(first))
         return Object.entries(first as Record<string, unknown>);
-      return (jsonData as unknown[]).map((v, i) => [String(i), v]);
+      return (jsonData as unknown[]).slice(0, 1).map((v, i) => [String(i), v]);
     }
     if (typeof jsonData === 'object')
       return Object.entries(jsonData as Record<string, unknown>);
@@ -227,7 +279,7 @@ export default function DataPanel() {
             </div>
             {totalRows !== null && (
               <span className="text-[10px] text-muted">
-                Array · {totalRows} {totalRows === 1 ? 'registro' : 'registros'} · mostrando estructura del primero
+                Array · {totalRows} {totalRows === 1 ? 'registro' : 'registros'} · mostrando schema del primero
               </span>
             )}
           </>
@@ -267,15 +319,15 @@ export default function DataPanel() {
             ? <>
                 <span style={{ color: 'var(--accent)' }}>● </span>
                 Campo <strong className="text-ink">{selectedDataField.binding || 'sin binding'}</strong> seleccionado —
-                haz clic en un campo de texto para vincularlo
+                clic en hoja para vincular
               </>
             : <span className="text-muted">
-                Selecciona un elemento «Campo de datos» en el canvas para vincular campos
+                Doble clic o arrastra un campo al lienzo para crearlo
               </span>}
         </div>
       )}
 
-      {/* ── Árbol JSON ── */}
+      {/* ── Árbol JSON (schema) ── */}
       {jsonData && (
         <div className="flex-1 overflow-y-auto px-2 py-2">
           {rootEntries.map(([k, v]) => (
@@ -288,6 +340,7 @@ export default function DataPanel() {
               usedPaths={usedPaths}
               selectedDataFieldId={selectedDataField?.id ?? null}
               onBind={handleBind}
+              onCreate={handleCreate}
             />
           ))}
         </div>

@@ -15,7 +15,7 @@ import { useToolStore } from '@/store/toolStore';
 import { useSelectionStore } from '@/store/selectionStore';
 import { MM_TO_PX, pxToMm } from '@/utils/units';
 import { nextId } from '@/utils/id';
-import type { ImageEl, TextEl } from '@/types/document';
+import type { DataFieldEl, ImageEl, TextEl } from '@/types/document';
 
 export default function Canvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -227,6 +227,38 @@ export default function Canvas() {
     e.target.value = '';
   }
 
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const binding = e.dataTransfer.getData('text/x-binding-path');
+    if (!binding || !page) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const canvasPx = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const xMm = pxToMm(canvasPx.x - offset.x, zoom);
+    const yMm = pxToMm(canvasPx.y - offset.y, zoom);
+    const el: DataFieldEl = {
+      id: nextId('el'),
+      type: 'dataField',
+      name: binding.split('.').pop() ?? binding,
+      x: Math.max(0, xMm),
+      y: Math.max(0, yMm),
+      width: 60,
+      height: 8,
+      rotation: 0,
+      visible: true,
+      locked: false,
+      zIndex: nextZIndex(),
+      binding,
+      fallback: '',
+      fontFamily: 'Helvetica',
+      fontSize: 12,
+      color: '#000000',
+    };
+    addElement(page.id, el);
+    select([el.id]);
+    setActiveTool('select');
+  }
+
   function onMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
     const isOnStage = e.target === e.target.getStage();
 
@@ -336,6 +368,8 @@ export default function Canvas() {
       ref={containerRef}
       className="h-full w-full relative overflow-hidden"
       style={{ background: 'var(--canvas)', cursor }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+      onDrop={handleDrop}
     >
       <input
         ref={imageInputRef}
