@@ -1,66 +1,100 @@
-import { Plus, Search, MoreHorizontal } from 'lucide-react';
+import { useState } from 'react';
+import { Layers, Palette } from 'lucide-react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import LayoutTree from '@/features/tree/LayoutTree';
 import Inspector from '@/features/properties/Inspector';
+import StylesPanel from '@/features/styles/StylesPanel';
 
-/**
- * Panel izquierdo dividido verticalmente:
- *  - Superior: LayoutTree (react-arborist)
- *  - Inferior: LayoutProperties / Inspector
- */
+type Tab = 'layers' | 'styles';
+
 export default function LeftPanel() {
+  const [tab, setTab] = useState<Tab>('layers');
+
   return (
     <div className="h-full flex flex-col">
-      <PanelGroup direction="vertical" autoSaveId="left-panel">
-        <Panel defaultSize={55} minSize={20}>
-          <div className="h-full flex flex-col">
-            <SectionHeader title="Árbol de capas" />
-            <div className="flex-1 overflow-auto">
-              <LayoutTree />
+      {/* ── Tab switcher ── */}
+      <div
+        className="h-8 shrink-0 flex items-center px-1 gap-0.5"
+        style={{ borderBottom: '1px solid var(--line)', background: 'var(--bg-1)' }}
+      >
+        <TabBtn
+          active={tab === 'layers'}
+          icon={Layers}
+          label="Capas"
+          onClick={() => setTab('layers')}
+        />
+        <TabBtn
+          active={tab === 'styles'}
+          icon={Palette}
+          label="Estilos"
+          onClick={() => setTab('styles')}
+        />
+      </div>
+
+      {/* ── Contenido según tab ── */}
+      {tab === 'layers' && (
+        <PanelGroup direction="vertical" autoSaveId="left-panel">
+          <Panel defaultSize={55} minSize={20}>
+            <div className="h-full flex flex-col">
+              <SectionHeader title="Árbol de capas" />
+              <div className="flex-1 min-h-0 overflow-auto">
+                <LayoutTree />
+              </div>
             </div>
-          </div>
-        </Panel>
-        <PanelResizeHandle className="h-px bg-line hover:bg-accent-dim transition-colors" />
-        <Panel defaultSize={45} minSize={20}>
-          <div className="h-full flex flex-col">
-            <SectionHeader title="Propiedades" />
-            <div className="flex-1 overflow-auto">
-              <Inspector />
+          </Panel>
+          <PanelResizeHandle className="h-px bg-line hover:bg-accent-dim transition-colors" />
+          <Panel defaultSize={45} minSize={20}>
+            <div className="h-full flex flex-col">
+              <SectionHeader title="Propiedades" />
+              <div className="flex-1 min-h-0 overflow-auto">
+                <Inspector />
+              </div>
             </div>
+          </Panel>
+        </PanelGroup>
+      )}
+
+      {tab === 'styles' && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <SectionHeader title="Estilos" />
+          <div className="flex-1 min-h-0">
+            <StylesPanel />
           </div>
-        </Panel>
-      </PanelGroup>
+        </div>
+      )}
     </div>
+  );
+}
+
+function TabBtn({
+  active, icon: Icon, label, onClick,
+}: {
+  active: boolean;
+  icon: typeof Layers;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 h-6 px-2.5 rounded text-11 transition-colors"
+      style={
+        active
+          ? { background: 'var(--accent-soft)', color: 'var(--accent)', fontWeight: 600 }
+          : { color: 'var(--ink-2)' }
+      }
+    >
+      <Icon size={12} />
+      {label}
+    </button>
   );
 }
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="h-7 px-2 flex items-center border-b border-line-2 bg-bg-2">
+    <div className="h-7 px-2 flex items-center shrink-0" style={{ borderBottom: '1px solid var(--line-2)', background: 'var(--bg-2)' }}>
       <span className="text-11 font-semibold text-ink uppercase tracking-wide">{title}</span>
-      <div className="ml-auto flex items-center gap-0.5">
-        <button
-          type="button"
-          className="w-5 h-5 rounded-3 hover:bg-bg-3 text-ink-2 flex items-center justify-center"
-          aria-label="Añadir"
-        >
-          <Plus size={12} />
-        </button>
-        <button
-          type="button"
-          className="w-5 h-5 rounded-3 hover:bg-bg-3 text-ink-2 flex items-center justify-center"
-          aria-label="Buscar"
-        >
-          <Search size={12} />
-        </button>
-        <button
-          type="button"
-          className="w-5 h-5 rounded-3 hover:bg-bg-3 text-ink-2 flex items-center justify-center"
-          aria-label="Más"
-        >
-          <MoreHorizontal size={12} />
-        </button>
-      </div>
     </div>
   );
 }
