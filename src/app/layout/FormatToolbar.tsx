@@ -275,18 +275,6 @@ export default function FormatToolbar() {
         onClick={() => applyText({ align: 'justify-block' })}
       />
 
-      <div className="ml-auto">
-        <select
-          disabled={textDisabled}
-          className="h-[22px] bg-bg-3 border border-line-2 rounded-3 text-11 px-1.5 outline-none disabled:opacity-50"
-          style={{ width: 150 }}
-        >
-          <option>Normal</option>
-          <option>Título 1</option>
-          <option>Título 2</option>
-          <option>Cita</option>
-        </select>
-      </div>
     </div>
   );
 }

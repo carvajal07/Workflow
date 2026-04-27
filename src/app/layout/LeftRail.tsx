@@ -23,6 +23,7 @@ const groups: { items: { icon: typeof Square; tool: Tool; label: string; shortcu
     },
     {
       items: [
+        { icon: LayoutTemplate, tool: 'frame', label: 'Área (Frame)', shortcut: 'F' },
         { icon: Type, tool: 'text', label: 'Texto', shortcut: 'T' },
         { icon: Square, tool: 'rect', label: 'Rectángulo', shortcut: 'R' },
         { icon: Circle, tool: 'circle', label: 'Círculo', shortcut: 'O' },
@@ -35,11 +36,6 @@ const groups: { items: { icon: typeof Square; tool: Tool; label: string; shortcu
         { icon: Image, tool: 'image', label: 'Imagen', shortcut: 'I' },
         { icon: Table2, tool: 'table', label: 'Tabla', shortcut: '' },
         { icon: QrCode, tool: 'qr', label: 'QR', shortcut: '' },
-      ],
-    },
-    {
-      items: [
-        { icon: LayoutTemplate, tool: 'frame', label: 'Área (Frame)', shortcut: 'F' },
       ],
     },
   ];

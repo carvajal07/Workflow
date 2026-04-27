@@ -293,10 +293,6 @@ function buildTree(doc: DocumentModel): TreeNode[] {
   );
 
   return [
-    group('g:data', 'Datos', [
-      ...doc.data.variables.map((v): TreeNode => ({ id: `var:${v.id}`, name: v.name, kind: 'variable' })),
-      ...doc.data.datasets.map((d): TreeNode => ({ id: `ds:${d.id}`, name: d.name, kind: 'variable' })),
-    ]),
     group('g:pages', 'Páginas',
       doc.pages.map((p): TreeNode => ({
         id: `page:${p.id}`,
