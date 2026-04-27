@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Database, RefreshCw, Upload, ChevronDown, ChevronRight, Link, LinkOff } from 'lucide-react';
+import { Database, RefreshCw, Upload, ChevronDown, ChevronRight, Link, Unlink } from 'lucide-react';
 import { useDocumentStore } from '@/store/documentStore';
 import { useSelectionStore } from '@/store/selectionStore';
 import type { DataFieldEl } from '@/types/document';
@@ -107,7 +107,7 @@ function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId,
           )}
           {canBind && !isUsed && (
             <span className="opacity-0 group-hover:opacity-100 transition-opacity" title="Click para vincular">
-              <LinkOff size={10} className="text-muted" />
+              <Unlink size={10} className="text-muted" />
             </span>
           )}
         </span>
