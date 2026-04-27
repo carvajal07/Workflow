@@ -67,13 +67,14 @@ export default function Inspector() {
           </Section>
 
           <Section title="Márgenes">
-            <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+            <div className="grid grid-cols-2 gap-x-2 gap-y-2">
               {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
-                <div key={side} className="flex items-center gap-2">
-                  <span className="text-ink-2 text-[10px] w-[52px] text-right shrink-0">
-                    {MARGIN_LABELS[side]}
-                  </span>
-                  <div className="h-[22px] flex items-center bg-bg-3 border border-line-2 rounded-3 px-1.5 flex-1">
+                <div key={side} className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-muted leading-none">{MARGIN_LABELS[side]}</span>
+                  <div
+                    className="h-[26px] flex items-center rounded-3 px-2 gap-1 border"
+                    style={{ background: 'var(--bg-2)', borderColor: 'var(--line-2)' }}
+                  >
                     <input
                       type="number"
                       step={0.5}
@@ -84,9 +85,10 @@ export default function Inspector() {
                         if (!Number.isNaN(v) && v >= 0)
                           updatePage(page.id, { margin: { ...page.margin, [side]: v } });
                       }}
-                      className="bg-transparent w-full text-right font-mono text-11 outline-none"
+                      className="bg-transparent flex-1 font-mono text-11 outline-none min-w-0"
+                      style={{ color: 'var(--ink)' }}
                     />
-                    <span className="text-muted text-[10px] ml-1">mm</span>
+                    <span className="text-[10px] shrink-0" style={{ color: 'var(--muted)' }}>mm</span>
                   </div>
                 </div>
               ))}
