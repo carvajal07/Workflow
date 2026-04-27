@@ -47,16 +47,16 @@ export default function AppShell() {
 
       {/* Row 4: Main — 3 columnas */}
       {showRail && (
-        <div style={{ gridRow: 4, gridColumn: 1 }} className="border-r border-line bg-bg-1">
+        <div style={{ gridRow: 4, gridColumn: 1 }} className="border-r border-line bg-bg-1 min-h-0 overflow-hidden">
           <LeftRail />
         </div>
       )}
       {showLeft && (
-        <div style={{ gridRow: 4, gridColumn: 2 }} className="border-r border-line bg-bg-1">
+        <div style={{ gridRow: 4, gridColumn: 2 }} className="border-r border-line bg-bg-1 min-h-0 overflow-hidden">
           <LeftPanel />
         </div>
       )}
-      <div style={{ gridRow: 4, gridColumn: showLeft ? 3 : showRail ? '2 / -1' : '1 / -1' }}>
+      <div style={{ gridRow: 4, gridColumn: showLeft ? 3 : showRail ? '2 / -1' : '1 / -1' }} className="min-h-0 overflow-hidden">
         <Canvas />
       </div>
 
