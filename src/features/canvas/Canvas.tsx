@@ -25,7 +25,6 @@ export default function Canvas() {
   const zoom = useUIStore((s) => s.zoom);
   const setZoom = useUIStore((s) => s.setZoom);
   const setCursor = useUIStore((s) => s.setCursor);
-  const showGrid = useUIStore((s) => s.showGrid);
   const activeTool = useToolStore((s) => s.active);
   const setActiveTool = useToolStore((s) => s.setActive);
   const clearSelection = useSelectionStore((s) => s.clear);
@@ -378,7 +377,7 @@ export default function Canvas() {
               offsetY={offset.y}
             />
           )}
-          {page && showGrid && (
+          {page && (
             <GuidesLayer
               page={page}
               zoom={zoom}
