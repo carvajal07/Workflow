@@ -28,9 +28,10 @@ export default function GuidesLayer({ page, zoom, offsetX, offsetY }: Props) {
           height={el.height * s}
           rotation={el.rotation}
           fill="transparent"
-          stroke="rgba(100,149,237,0.5)"
+          stroke="rgba(144,39,116,0.72)"
           strokeWidth={1}
-          dash={[5, 4]}
+          strokeScaleEnabled={false}
+          dash={[4, 3]}
           listening={false}
         />
       ))}
