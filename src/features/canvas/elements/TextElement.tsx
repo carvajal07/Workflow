@@ -63,7 +63,7 @@ export default function TextElement({ el, zoom, onSelect, onChange, onEdit, drag
         sceneFunc={(ctx, shape) => {
           const native = (ctx as unknown as { _context: CanvasRenderingContext2D })._context;
           native.save();
-          const cmds = layoutSpans(native, el.spans!, el, zoom, el.width * MM_TO_PX * zoom);
+          const cmds = layoutSpans(native, el.spans!, el, MM_TO_PX * zoom, el.width * MM_TO_PX * zoom);
           drawCmds(native, cmds);
           native.restore();
           // hit region = bounding rect
