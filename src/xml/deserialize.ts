@@ -7,6 +7,7 @@ import type {
   QrEl,
   RectEl,
   TextEl,
+  TextSpan,
 } from '@/types/document';
 import { metersToMm } from '@/utils/units';
 import { nextId } from '@/utils/id';
@@ -16,6 +17,8 @@ import { nextId } from '@/utils/id';
  *
  * Estrategia:
  * - Usa `DOMParser` del navegador (sin dependencia extra).
+ * - Lee todos los nodos `<Variable>` para reconstruir doc.data.variables y el
+ *   mapa ID→nombre usado al parsear referencias `<O Id="..."/>` en los flujos.
  * - Lee todos los nodos `<Page>` con `<Width>/<Height>` como páginas.
  * - Para elementos de cada página, recorre nodos de posición (`PathObject`,
  *   `FlowArea`, `ImageObject`, `Barcode`, `Table`) cuyo `ParentId` coincida
@@ -25,6 +28,8 @@ import { nextId } from '@/utils/id';
  * Notas:
  * - El mapeo inverso PathObject → rect/circle/line es heurístico (por cantidad
  *   de segmentos); si no es concluyente cae a `rect` con ese bounding box.
+ * - Los FlowArea con nodos <O> en su contenido se reconstruyen como TextEl con
+ *   spans que incluyen el binding correspondiente.
  */
 export function deserializeFromXml(xml: string): DocumentModel {
   const parser = new DOMParser();
@@ -34,6 +39,12 @@ export function deserializeFromXml(xml: string): DocumentModel {
 
   const now = new Date().toISOString();
   const layoutName = getText(dom.querySelector('WorkFlow > Layout > Name')) ?? 'Untitled';
+
+  // Mapa varId → varName (para resolver referencias <O Id="..."/>)
+  const varIdToName = parseVariables(dom);
+
+  // Variables definidas: reconstruir doc.data.variables
+  const variables = Array.from(varIdToName.entries()).map(([id, name]) => ({ id, name }));
 
   // páginas: buscamos <Page> que tengan <Width> (versión config, no jerarquía)
   const pageNodes = Array.from(dom.querySelectorAll('Page')).filter((p) =>
@@ -46,7 +57,7 @@ export function deserializeFromXml(xml: string): DocumentModel {
     const heightM = parseFloat(getText(node.querySelector(':scope > Height')) ?? '0.297');
     // nombre: buscarlo en el nodo jerarquía que tenga el mismo Id
     const name = findPageName(dom, id) ?? `Page ${i + 1}`;
-    const elements = parseElementsForPage(dom, id);
+    const elements = parseElementsForPage(dom, id, varIdToName);
     return {
       id,
       name,
@@ -80,7 +91,7 @@ export function deserializeFromXml(xml: string): DocumentModel {
       rowSets: [],
       cells: [],
     },
-    data: { variables: [], datasets: [] },
+    data: { variables, datasets: [] },
     dynamicComms: [],
     flows: [],
     createdAt: now,
@@ -162,7 +173,27 @@ function baseProps(id: string, idx: number) {
   };
 }
 
-function parseElementsForPage(dom: Document, pageId: string): ElementModel[] {
+/**
+ * Parsea todos los nodos <Variable> del XML y devuelve un mapa varId → varName.
+ * Se usa para resolver las referencias <O Id="varId"/> dentro de los flujos.
+ */
+function parseVariables(dom: Document): Map<string, string> {
+  const map = new Map<string, string>();
+  Array.from(dom.querySelectorAll('Variable')).forEach((v) => {
+    const id = getText(v.querySelector(':scope > Id'));
+    const name = getText(v.querySelector(':scope > Name'));
+    if (id !== null && name !== null) {
+      map.set(id, name);
+    }
+  });
+  return map;
+}
+
+function parseElementsForPage(
+  dom: Document,
+  pageId: string,
+  varIdToName: Map<string, string>,
+): ElementModel[] {
   const out: ElementModel[] = [];
 
   // ---- PathObject → rect/circle/line ----
@@ -235,7 +266,7 @@ function parseElementsForPage(dom: Document, pageId: string): ElementModel[] {
     const ps = readPosSize(cfg);
     if (!ps) return;
     const flowId = getText(cfg.querySelector(':scope > FlowId'));
-    const text = flowId ? extractFlowText(dom, flowId) : '';
+    const flowContent = flowId ? extractFlowContent(dom, flowId, varIdToName) : { text: '' };
     const fontFamily = getText(cfg.querySelector(':scope > FontFamily')) ?? 'Arial';
     const fontSize = parseFloat(getText(cfg.querySelector(':scope > FontSize')) ?? '10');
     const fontWeight = parseInt(getText(cfg.querySelector(':scope > FontWeight')) ?? '400', 10);
@@ -248,7 +279,8 @@ function parseElementsForPage(dom: Document, pageId: string): ElementModel[] {
       name,
       ...baseProps(id, idx),
       ...ps,
-      text,
+      text: flowContent.text,
+      spans: flowContent.spans,
       fontFamily,
       fontSize,
       fontStyle,
@@ -298,7 +330,11 @@ function parseElementsForPage(dom: Document, pageId: string): ElementModel[] {
       | 'Q'
       | 'H';
     const modW = parseFloat(getText(gen?.querySelector(':scope > ModulWidth') ?? null) ?? '0.001');
-    const variable = getText(cfg.querySelector(':scope > VariableId')) ?? undefined;
+    // Resolver el VariableId al nombre/binding original
+    const rawVariableId = getText(cfg.querySelector(':scope > VariableId')) ?? undefined;
+    const variable = rawVariableId
+      ? (varIdToName.get(rawVariableId) ?? rawVariableId)
+      : undefined;
     const el: QrEl = {
       type: 'qr',
       name,
@@ -315,16 +351,65 @@ function parseElementsForPage(dom: Document, pageId: string): ElementModel[] {
   return out;
 }
 
-function extractFlowText(dom: Document, flowId: string): string {
+/**
+ * Extrae el contenido de un Flow como texto plano y, cuando hay nodos <O>,
+ * reconstruye los spans con bindings resolviendo el varId mediante varIdToName.
+ */
+function extractFlowContent(
+  dom: Document,
+  flowId: string,
+  varIdToName: Map<string, string>,
+): { text: string; spans?: TextSpan[] } {
   const flow = Array.from(dom.querySelectorAll('Flow')).find((f) => {
     return (
       getText(f.querySelector(':scope > Id')) === flowId &&
       !f.querySelector(':scope > ParentId')
     );
   });
-  if (!flow) return '';
+  if (!flow) return { text: '' };
+
   const fc = flow.querySelector(':scope > FlowContent');
-  return fc?.textContent?.trim() ?? '';
+  if (!fc) return { text: '' };
+
+  const spans: TextSpan[] = [];
+  let hasBinding = false;
+
+  // Recorrer cada nodo <T> dentro de los <P>
+  fc.querySelectorAll('P > T').forEach((t) => {
+    const oNodes = Array.from(t.querySelectorAll(':scope > O'));
+
+    if (oNodes.length > 0) {
+      // Extraer texto de los nodos de texto hijos (usado como fallback en DataField)
+      let fallbackText = '';
+      t.childNodes.forEach((child) => {
+        if (child.nodeType === Node.TEXT_NODE) {
+          fallbackText += child.textContent ?? '';
+        }
+      });
+      const fallback = fallbackText.trim() || undefined;
+
+      oNodes.forEach((oNode) => {
+        const oId = oNode.getAttribute('Id');
+        if (oId) {
+          // Resolver el ID al nombre/binding original
+          const binding = varIdToName.get(oId) ?? oId;
+          spans.push({ binding, fallback });
+          hasBinding = true;
+        }
+      });
+    } else {
+      const text = t.textContent?.trim() ?? '';
+      if (text) spans.push({ text });
+    }
+  });
+
+  const text = spans
+    .map((s) => s.text ?? `{{${s.binding ?? ''}}}`)
+    .join('');
+
+  // Si no hay bindings, devolver solo el texto plano sin spans
+  if (!hasBinding) return { text };
+  return { text, spans };
 }
 
 function getImageLocation(dom: Document, imageId: string): string | null {

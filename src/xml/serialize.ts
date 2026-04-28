@@ -25,15 +25,21 @@ import { mmToMeters } from '@/utils/units';
  * - Image           → `ImageObject` + asset `Image`.
  * - QR              → `Barcode` con `BarcodeGenerator Type=QR`.
  * - Table           → `Table` + `RowSet` + `Cell` (stub mínimo).
+ * - Variables       → `Variable` nodes con Id/Name/ParentId/IndexInParent.
  */
 export function serializeToXml(doc: DocumentModel): string {
   const b: string[] = [];
+  const varMap = buildVariableMap(doc);
+
   b.push('<?xml version="1.0" encoding="UTF-8"?>');
   b.push('<WorkFlow>');
   b.push('  <Layout>');
   b.push('    <Id>Layout1</Id>');
   b.push(`    <Name>${esc(doc.name)}</Name>`);
   b.push('    <Layout>');
+
+  // ---- Variables ----
+  serializeVariables(b, varMap);
 
   // ---- Pages (jerarquía + config) ----
   doc.pages.forEach((page, i) => {
@@ -55,7 +61,7 @@ export function serializeToXml(doc: DocumentModel): string {
 
   // ---- Elementos de cada página ----
   doc.pages.forEach((page) => {
-    page.elements.forEach((el, idx) => serializeElement(b, el, page, idx));
+    page.elements.forEach((el, idx) => serializeElement(b, el, page, idx, varMap));
   });
 
   // ---- Assets mínimos ----
@@ -115,9 +121,71 @@ function parentHeader(
   b.push(`      </${tag}>`);
 }
 
+/**
+ * Construye un mapa de binding/nombre de variable → ID numérico de variable.
+ * Primero incluye las variables definidas explícitamente en doc.data.variables,
+ * luego agrega los bindings encontrados en elementos del canvas que no tengan
+ * una variable definida.
+ */
+function buildVariableMap(doc: DocumentModel): Map<string, string> {
+  const map = new Map<string, string>();
+
+  // Variables definidas explícitamente
+  doc.data.variables.forEach((v) => {
+    map.set(v.name, v.id);
+  });
+
+  let counter = map.size;
+
+  const addBinding = (binding: string) => {
+    if (!map.has(binding)) {
+      map.set(binding, String(counter++));
+    }
+  };
+
+  doc.pages.forEach((page) => {
+    page.elements.forEach((el) => {
+      if (el.type === 'text') {
+        const spans = (el as TextEl).spans;
+        if (spans) {
+          spans.forEach((span) => {
+            if (span.binding) addBinding(span.binding);
+          });
+        }
+      } else if (el.type === 'dataField') {
+        addBinding((el as DataFieldEl).binding);
+      } else if (el.type === 'qr') {
+        const variable = (el as QrEl).variable;
+        if (variable) addBinding(variable);
+      }
+    });
+  });
+
+  return map;
+}
+
+/** Emite nodos <Variable> para todas las variables/bindings del documento. */
+function serializeVariables(b: string[], varMap: Map<string, string>) {
+  let i = 0;
+  varMap.forEach((id, name) => {
+    b.push('      <Variable>');
+    b.push(`        <Id>${esc(id)}</Id>`);
+    b.push(`        <Name>${esc(name)}</Name>`);
+    b.push('        <ParentId>Def.Data</ParentId>');
+    b.push(`        <IndexInParent>${i++}</IndexInParent>`);
+    b.push('      </Variable>');
+  });
+}
+
 // ---- mapeo por tipo ----
 
-function serializeElement(b: string[], el: ElementModel, page: Page, idx: number): void {
+function serializeElement(
+  b: string[],
+  el: ElementModel,
+  page: Page,
+  idx: number,
+  varMap: Map<string, string>,
+): void {
   switch (el.type) {
     case 'rect':
     case 'circle':
@@ -126,11 +194,11 @@ function serializeElement(b: string[], el: ElementModel, page: Page, idx: number
       return pathObject(b, el, page, idx);
     case 'text':
     case 'dataField':
-      return flowArea(b, el, page, idx);
+      return flowArea(b, el, page, idx, varMap);
     case 'image':
       return imageObject(b, el, page, idx);
     case 'qr':
-      return barcodeObject(b, el, page, idx);
+      return barcodeObject(b, el, page, idx, varMap);
     case 'table':
       return tableObject(b, el, page, idx);
   }
@@ -194,7 +262,13 @@ function pathObject(
   b.push('      </PathObject>');
 }
 
-function flowArea(b: string[], el: TextEl | DataFieldEl, page: Page, idx: number) {
+function flowArea(
+  b: string[],
+  el: TextEl | DataFieldEl,
+  page: Page,
+  idx: number,
+  varMap: Map<string, string>,
+) {
   const flowId = `${el.id}_flow`;
   parentHeader(b, 'FlowArea', el.id, el.name ?? 'Text', page.id, idx);
   b.push('      <FlowArea>');
@@ -219,11 +293,29 @@ function flowArea(b: string[], el: TextEl | DataFieldEl, page: Page, idx: number
   b.push('        <Type>Simple</Type>');
   b.push('        <FlowContent>');
   b.push('          <P Id="Def.ParaStyle">');
+
   if (el.type === 'text') {
-    b.push(`            <T Id="Def.TextStyle">${esc(el.text)}</T>`);
+    const spans = el.spans;
+    if (spans && spans.length > 0) {
+      // Cada span se emite como un nodo <T> separado.
+      // Los spans con binding usan <O Id="varId"/> según el esquema.
+      for (const span of spans) {
+        if (span.binding) {
+          const varId = varMap.get(span.binding) ?? span.binding;
+          b.push(`            <T Id="Def.TextStyle"><O Id="${esc(varId)}"/></T>`);
+        } else if (span.text) {
+          b.push(`            <T Id="Def.TextStyle">${esc(span.text)}</T>`);
+        }
+      }
+    } else {
+      b.push(`            <T Id="Def.TextStyle">${esc(el.text)}</T>`);
+    }
   } else {
-    b.push(`            <T Id="Def.TextStyle">${esc(el.fallback)}<O Id="${esc(el.binding)}"/></T>`);
+    // dataField: fallback + O en el mismo T, usando el ID de variable del mapa
+    const varId = varMap.get(el.binding) ?? el.binding;
+    b.push(`            <T Id="Def.TextStyle">${esc(el.fallback)}<O Id="${esc(varId)}"/></T>`);
   }
+
   b.push('          </P>');
   b.push('        </FlowContent>');
   b.push('      </Flow>');
@@ -246,12 +338,21 @@ function imageObject(b: string[], el: ImageEl, page: Page, idx: number) {
   b.push('      </ImageObject>');
 }
 
-function barcodeObject(b: string[], el: QrEl, page: Page, idx: number) {
+function barcodeObject(
+  b: string[],
+  el: QrEl,
+  page: Page,
+  idx: number,
+  varMap: Map<string, string>,
+) {
   parentHeader(b, 'Barcode', el.id, el.name ?? 'QR', page.id, idx);
   b.push('      <Barcode>');
   b.push(`        <Id>${esc(el.id)}</Id>`);
   posSize(b, el);
-  if (el.variable) b.push(`        <VariableId>${esc(el.variable)}</VariableId>`);
+  if (el.variable) {
+    const varId = varMap.get(el.variable) ?? el.variable;
+    b.push(`        <VariableId>${esc(varId)}</VariableId>`);
+  }
   b.push('        <FillStyleId>Def.BlackFill</FillStyleId>');
   b.push('        <BarcodeGenerator>');
   b.push('          <Type>QR</Type>');
