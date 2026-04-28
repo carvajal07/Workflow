@@ -13,6 +13,7 @@ import type {
   TextEl,
 } from '@/types/document';
 import { mmToMeters } from '@/utils/units';
+import { nextId } from '@/utils/id';
 
 /**
  * Serializa un DocumentModel al XML simplificado del backend (proyectoPDF).
@@ -269,7 +270,7 @@ function flowArea(
   idx: number,
   varMap: Map<string, string>,
 ) {
-  const flowId = `${el.id}_flow`;
+  const flowId = nextId();
   parentHeader(b, 'FlowArea', el.id, el.name ?? 'Text', page.id, idx);
   b.push('      <FlowArea>');
   b.push(`        <Id>${esc(el.id)}</Id>`);

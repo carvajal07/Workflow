@@ -57,7 +57,6 @@ function JsonNode({ keyName, value, path, depth, usedPaths, onCreate }: NodeProp
   })();
 
   const { bg, text, label } = TYPE_COLOR[type];
-  const arrayLen = type === 'array' ? (value as unknown[]).length : null;
 
   return (
     <div style={{ paddingLeft: depth === 0 ? 0 : 12 }}>
@@ -71,7 +70,6 @@ function JsonNode({ keyName, value, path, depth, usedPaths, onCreate }: NodeProp
         }}
         onClick={() => { if (isExpandable) setOpen((o) => !o); }}
         onDoubleClick={(e) => { e.stopPropagation(); onCreate(path); }}
-        title={`Doble clic: crear texto con variable · Arrastra sobre un texto del lienzo`}
       >
         {/* Expand chevron */}
         <span className="w-3 shrink-0 flex items-center justify-center text-muted">
@@ -91,23 +89,7 @@ function JsonNode({ keyName, value, path, depth, usedPaths, onCreate }: NodeProp
         {/* Key name */}
         <span className="text-11 text-ink-2 shrink-0 font-mono">{keyName}</span>
 
-        {/* Array length */}
-        {arrayLen !== null && (
-          <span className="text-[10px] text-muted shrink-0 ml-0.5">[{arrayLen}]</span>
-        )}
-
-        {/* Path as binding ID — shown for leaf nodes */}
-        {!isExpandable && path && (
-          <span
-            className="text-[9px] text-muted truncate font-mono ml-1 flex-1 min-w-0"
-            title={path}
-          >
-            {path}
-          </span>
-        )}
-
-        {/* Spacer for expandable nodes */}
-        {isExpandable && <span className="flex-1" />}
+        <span className="flex-1" />
 
         {/* Indicador: en uso */}
         {isUsed && (
@@ -311,23 +293,6 @@ export default function DataPanel() {
         </div>
       )}
 
-      {/* ── Leyenda ── */}
-      {jsonData && (
-        <div
-          className="shrink-0 px-3 py-2 flex flex-wrap gap-x-3 gap-y-1"
-          style={{ borderTop: '1px solid var(--line-2)' }}
-        >
-          {Object.entries(TYPE_COLOR).map(([type, { bg, text, label }]) => (
-            <span key={type} className="flex items-center gap-1 text-[9px]">
-              <span className="rounded px-1 py-0.5 font-mono" style={{ background: bg, color: text }}>{label}</span>
-              <span className="text-muted">{type}</span>
-            </span>
-          ))}
-          <span className="flex items-center gap-1 text-[9px] text-muted">
-            <Link size={9} style={{ color: 'var(--accent)' }} /> en uso
-          </span>
-        </div>
-      )}
     </div>
   );
 }
