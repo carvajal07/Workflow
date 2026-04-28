@@ -36,8 +36,8 @@ export default function LineLikeElement<T extends LineEl | PenEl>({
       tension={tension}
       dash={el.type === 'line' ? (el as LineEl).dash : undefined}
       visible={el.visible}
-      lineCap="round"
-      lineJoin="round"
+      lineCap="butt"
+      lineJoin="miter"
       draggable={draggable && !el.locked}
       hitStrokeWidth={Math.max(6, el.strokeWidth * s + 4)}
       onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey)}

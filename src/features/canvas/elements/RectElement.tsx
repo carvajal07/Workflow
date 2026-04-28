@@ -26,6 +26,8 @@ export default function RectElement({ el, zoom, onSelect, onChange, draggable }:
       stroke={el.stroke}
       strokeWidth={el.strokeWidth * s}
       cornerRadius={el.cornerRadius * s}
+      dash={el.dash?.map((v) => v * s)}
+      dashEnabled={!!el.dash?.length}
       visible={el.visible}
       draggable={draggable && !el.locked}
       onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey)}

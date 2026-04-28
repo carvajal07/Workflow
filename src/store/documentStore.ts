@@ -1,7 +1,33 @@
 import { create } from 'zustand';
 import { temporal } from 'zundo';
-import type { DocumentModel, ElementModel, Page, TextStyle, ParagraphStyle, BorderStyle, LineStyle, FillStyle } from '@/types/document';
+import type { DocumentModel, ElementModel, Page, TextStyle, ParagraphStyle, BorderStyle, LineStyle, FillStyle, LineDashStyle } from '@/types/document';
 import { nextId } from '@/utils/id';
+
+function getDashPattern(lineDash: LineDashStyle): number[] | undefined {
+  switch (lineDash) {
+    case 'Dashed': return [8, 4];
+    case 'Dotted': return [2, 4];
+    case 'DashDot': return [8, 4, 2, 4];
+    default: return undefined;
+  }
+}
+
+function applyBorderStyleProps(el: ElementModel, style: BorderStyle): ElementModel {
+  const dash = getDashPattern(style.lineDash);
+  const cornerRadius = style.corner === 'Round' ? style.radiusX : 0;
+  const common = { stroke: style.colorId, strokeWidth: style.lineWidth, dash, borderStyleId: style.id };
+  if (el.type === 'rect' || el.type === 'frame') {
+    return { ...el, ...common, cornerRadius };
+  }
+  return { ...el, ...common };
+}
+
+function applyLineStyleProps(el: ElementModel, style: LineStyle): ElementModel {
+  const base = { strokeWidth: style.width, lineStyleId: style.id } as Partial<ElementModel>;
+  if (style.colorId) Object.assign(base, { stroke: style.colorId });
+  if (el.type === 'line') return { ...el, ...base, dash: style.dash };
+  return { ...el, ...base };
+}
 
 export type StyleKey = 'textStyles' | 'paragraphStyles' | 'borderStyles' | 'lineStyles' | 'fillStyles';
 export type AnyStyleItem = TextStyle | ParagraphStyle | BorderStyle | LineStyle | FillStyle;
@@ -206,19 +232,46 @@ export const useDocumentStore = create<DocumentState>()(
         })),
 
       updateStyle: (key, id, patch) =>
-        set((s) => ({
-          doc: {
-            ...s.doc,
-            assets: {
-              ...s.doc.assets,
-              [key]: (s.doc.assets[key] as AnyStyleItem[]).map((it) =>
-                it.id === id ? { ...it, ...patch } : it,
-              ),
+        set((s) => {
+          const updatedList = (s.doc.assets[key] as AnyStyleItem[]).map((it) =>
+            it.id === id ? { ...it, ...patch } : it,
+          );
+          const updatedAssets = { ...s.doc.assets, [key]: updatedList };
+          const fullStyle = updatedList.find((it) => it.id === id);
+
+          let pages = s.doc.pages;
+          if (fullStyle) {
+            if (key === 'borderStyles') {
+              pages = pages.map((p) => ({
+                ...p,
+                elements: p.elements.map((e) =>
+                  'borderStyleId' in e && (e as { borderStyleId?: string }).borderStyleId === id
+                    ? applyBorderStyleProps(e, fullStyle as BorderStyle)
+                    : e,
+                ),
+              }));
+            } else if (key === 'lineStyles') {
+              pages = pages.map((p) => ({
+                ...p,
+                elements: p.elements.map((e) =>
+                  'lineStyleId' in e && (e as { lineStyleId?: string }).lineStyleId === id
+                    ? applyLineStyleProps(e, fullStyle as LineStyle)
+                    : e,
+                ),
+              }));
+            }
+          }
+
+          return {
+            doc: {
+              ...s.doc,
+              assets: updatedAssets,
+              pages,
+              updatedAt: new Date().toISOString(),
             },
-            updatedAt: new Date().toISOString(),
-          },
-          dirty: true,
-        })),
+            dirty: true,
+          };
+        }),
 
       removeStyle: (key, id) =>
         set((s) => ({

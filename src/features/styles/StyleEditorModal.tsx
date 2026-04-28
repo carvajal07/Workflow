@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
-import type { TextStyle, ParagraphStyle, BorderStyle, LineStyle, FillStyle } from '@/types/document';
+import type {
+  TextStyle, ParagraphStyle, BorderStyle, LineStyle, FillStyle,
+  CapStyle, LineDashStyle, CornerStyle,
+} from '@/types/document';
 import { useDocumentStore, type StyleKey, type AnyStyleItem } from '@/store/documentStore';
 import { nextId } from '@/utils/id';
 
@@ -56,6 +59,8 @@ export default function StyleEditorModal({ target, onClose }: Props) {
     setDraft((d) => ({ ...d, ...p } as AnyStyleItem));
   }
 
+  const modalWidth = target.key === 'borderStyles' || target.key === 'lineStyles' ? 420 : 380;
+
   return (
     <div
       ref={overlayRef}
@@ -68,8 +73,8 @@ export default function StyleEditorModal({ target, onClose }: Props) {
         style={{
           background: 'var(--bg-1)',
           border: '1px solid var(--bg-3)',
-          width: 380,
-          maxHeight: '80vh',
+          width: modalWidth,
+          maxHeight: '85vh',
         }}
       >
         {/* Header */}
@@ -153,40 +158,68 @@ export default function StyleEditorModal({ target, onClose }: Props) {
   );
 }
 
-/* ─── Campo helpers ─── */
+/* ─── Row helpers ─── */
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-11 text-muted w-32 shrink-0">{label}</span>
+      <span className="text-11 text-muted w-36 shrink-0">{label}</span>
       <div className="flex-1">{children}</div>
     </div>
   );
 }
 
-function NumInput({ value, onChange, min, step = 1 }: { value: number; onChange: (v: number) => void; min?: number; step?: number }) {
+function Divider({ label }: { label?: string }) {
   return (
-    <input
-      type="number"
-      className="field w-full"
-      value={value}
-      min={min}
-      step={step}
-      onChange={(e) => onChange(Number(e.target.value))}
-    />
+    <div className="flex items-center gap-2 pt-1">
+      {label && <span className="text-[10px] font-semibold text-muted uppercase tracking-wide">{label}</span>}
+      <div className="flex-1 h-px" style={{ background: 'var(--line-2)' }} />
+    </div>
+  );
+}
+
+function NumInput({
+  value, onChange, min = 0, max, step = 1, unit,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        type="number"
+        className="field flex-1 min-w-0"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+      {unit && <span className="text-[10px] text-muted shrink-0 w-6">{unit}</span>}
+    </div>
   );
 }
 
 function ColorInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={value.startsWith('#') ? value : '#000000'}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-8 h-7 rounded cursor-pointer border-0 p-0.5"
-        style={{ background: 'var(--bg-2)' }}
-      />
+      <div
+        className="w-7 h-7 rounded shrink-0 border cursor-pointer relative overflow-hidden"
+        style={{ borderColor: 'var(--line-2)' }}
+      >
+        <input
+          type="color"
+          value={value.startsWith('#') ? value : '#000000'}
+          onChange={(e) => onChange(e.target.value)}
+          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+          style={{ padding: 0, border: 'none' }}
+        />
+        <div className="w-full h-full rounded" style={{ background: value }} />
+      </div>
       <input
         className="field flex-1"
         value={value}
@@ -197,7 +230,272 @@ function ColorInput({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-/* ─── Campos por tipo ─── */
+/* ─── BorderStyle fields ─── */
+
+const DASH_PATTERNS: { value: LineDashStyle; label: string; preview: number[] | null }[] = [
+  { value: 'Solid',   label: 'Sólido',       preview: null },
+  { value: 'Dashed',  label: 'Guiones',       preview: [8, 4] },
+  { value: 'Dotted',  label: 'Puntos',        preview: [2, 4] },
+  { value: 'DashDot', label: 'Punto-guión',   preview: [8, 4, 2, 4] },
+];
+
+const CAP_OPTIONS: { value: CapStyle; label: string }[] = [
+  { value: 'Butt',   label: 'Plano (Butt)' },
+  { value: 'Round',  label: 'Redondo (Round)' },
+  { value: 'Square', label: 'Cuadrado (Square)' },
+];
+
+const CORNER_OPTIONS: { value: CornerStyle; label: string }[] = [
+  { value: 'Standard', label: 'Estándar (Miter)' },
+  { value: 'Round',    label: 'Redondo' },
+  { value: 'Bevel',    label: 'Bisel' },
+];
+
+function DashPreviewSvg({ pattern, color = 'currentColor' }: { pattern: number[] | null; color?: string }) {
+  const w = 48;
+  const h = 8;
+  const strokeDasharray = pattern ? pattern.join(' ') : undefined;
+  return (
+    <svg width={w} height={h} style={{ display: 'block', flexShrink: 0 }}>
+      <line
+        x1="2" y1={h / 2} x2={w - 2} y2={h / 2}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="butt"
+        strokeDasharray={strokeDasharray}
+      />
+    </svg>
+  );
+}
+
+function BorderPreview({ draft }: { draft: BorderStyle }) {
+  const w = 200;
+  const h = 56;
+  const pad = 12;
+  const r = draft.corner === 'Round' ? Math.min(draft.radiusX, (w - pad * 2) / 2, (h - pad * 2) / 2) : 0;
+  const dashPattern = DASH_PATTERNS.find((d) => d.value === (draft.lineDash ?? 'Solid'));
+  const strokeDasharray = dashPattern?.preview ? dashPattern.preview.join(' ') : undefined;
+  const strokeWidth = Math.max(0.5, Math.min(draft.lineWidth, 6));
+
+  return (
+    <div
+      className="flex items-center justify-center rounded"
+      style={{ background: 'var(--bg-0)', border: '1px solid var(--line-2)', padding: '8px 0' }}
+    >
+      <svg width={w} height={h}>
+        <rect
+          x={pad + strokeWidth / 2}
+          y={pad + strokeWidth / 2}
+          width={w - pad * 2 - strokeWidth}
+          height={h - pad * 2 - strokeWidth}
+          rx={r}
+          ry={r}
+          fill="none"
+          stroke={draft.colorId || '#000'}
+          strokeWidth={strokeWidth}
+          strokeLinecap={(draft.cap ?? 'Butt').toLowerCase() as 'butt' | 'round' | 'square'}
+          strokeLinejoin={draft.corner === 'Round' ? 'round' : draft.corner === 'Bevel' ? 'bevel' : 'miter'}
+          strokeDasharray={strokeDasharray}
+        />
+      </svg>
+    </div>
+  );
+}
+
+function BorderStyleFields({ draft, patch }: { draft: BorderStyle; patch: (p: Partial<BorderStyle>) => void }) {
+  const cap = draft.cap ?? 'Butt';
+  const lineDash = draft.lineDash ?? 'Solid';
+  const corner = draft.corner ?? 'Standard';
+  const radiusX = draft.radiusX ?? 0;
+  const radiusY = draft.radiusY ?? 0;
+  const selectedDash = DASH_PATTERNS.find((d) => d.value === lineDash) ?? DASH_PATTERNS[0];
+
+  return (
+    <>
+      {/* Vista previa */}
+      <BorderPreview draft={{ ...draft, cap, lineDash, corner, radiusX, radiusY }} />
+
+      <Divider label="Línea" />
+
+      {/* Color de relleno de línea */}
+      <Row label="Color de línea">
+        <ColorInput value={draft.colorId || '#000000'} onChange={(v) => patch({ colorId: v })} />
+      </Row>
+
+      {/* Grosor */}
+      <Row label="Grosor de línea">
+        <NumInput
+          value={draft.lineWidth}
+          min={0}
+          step={0.05}
+          unit="mm"
+          onChange={(v) => patch({ lineWidth: v })}
+        />
+      </Row>
+
+      {/* Estilo de extremo */}
+      <Row label="Extremo (Cap)">
+        <select
+          className="field w-full"
+          value={cap}
+          onChange={(e) => patch({ cap: e.target.value as CapStyle })}
+        >
+          {CAP_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </Row>
+
+      {/* Patrón de línea */}
+      <Row label="Estilo de línea">
+        <div className="flex items-center gap-2">
+          <select
+            className="field flex-1"
+            value={lineDash}
+            onChange={(e) => patch({ lineDash: e.target.value as LineDashStyle })}
+          >
+            {DASH_PATTERNS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <DashPreviewSvg pattern={selectedDash.preview} color="var(--ink)" />
+        </div>
+      </Row>
+
+      <Divider label="Esquinas" />
+
+      {/* Tipo de esquina */}
+      <Row label="Esquina">
+        <select
+          className="field w-full"
+          value={corner}
+          onChange={(e) => patch({ corner: e.target.value as CornerStyle })}
+        >
+          {CORNER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </Row>
+
+      {/* Radio X */}
+      <Row label="Radio X">
+        <NumInput
+          value={radiusX}
+          min={0}
+          step={0.5}
+          unit="mm"
+          onChange={(v) => patch({ radiusX: v })}
+        />
+      </Row>
+
+      {/* Radio Y */}
+      <Row label="Radio Y">
+        <NumInput
+          value={radiusY}
+          min={0}
+          step={0.5}
+          unit="mm"
+          onChange={(v) => patch({ radiusY: v })}
+        />
+      </Row>
+    </>
+  );
+}
+
+/* ─── LineStyle fields ─── */
+
+const LINE_JOIN_OPTIONS: { value: LineStyle['join']; label: string }[] = [
+  { value: 'Miter', label: 'Miter (punta)' },
+  { value: 'Round', label: 'Redondo' },
+  { value: 'Bevel', label: 'Bisel' },
+];
+
+function LineStyleFields({ draft, patch }: { draft: LineStyle; patch: (p: Partial<LineStyle>) => void }) {
+  const cap = draft.cap ?? 'Butt';
+  const join = draft.join ?? 'Round';
+  const selectedDash = DASH_PATTERNS.find(
+    (d) => JSON.stringify(d.preview) === JSON.stringify(draft.dash ?? null),
+  ) ?? DASH_PATTERNS[0];
+
+  return (
+    <>
+      {/* Vista previa */}
+      <div
+        className="flex items-center justify-center rounded"
+        style={{ background: 'var(--bg-0)', border: '1px solid var(--line-2)', padding: '12px 16px' }}
+      >
+        <svg width={180} height={20}>
+          <line
+            x1="4"
+            y1="10"
+            x2="176"
+            y2="10"
+            stroke={draft.colorId || 'var(--ink)'}
+            strokeWidth={Math.max(1, Math.min(draft.width * 3, 10))}
+            strokeLinecap={(cap).toLowerCase() as 'butt' | 'round' | 'square'}
+            strokeDasharray={draft.dash?.join(' ')}
+          />
+        </svg>
+      </div>
+
+      <Divider label="Trazo" />
+
+      {draft.colorId !== undefined && (
+        <Row label="Color">
+          <ColorInput value={draft.colorId || '#000000'} onChange={(v) => patch({ colorId: v })} />
+        </Row>
+      )}
+
+      <Row label="Grosor">
+        <NumInput value={draft.width} min={0} step={0.1} unit="mm" onChange={(v) => patch({ width: v })} />
+      </Row>
+
+      <Row label="Extremo (Cap)">
+        <select
+          className="field w-full"
+          value={cap}
+          onChange={(e) => patch({ cap: e.target.value as CapStyle })}
+        >
+          {CAP_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </Row>
+
+      <Row label="Unión (Join)">
+        <select
+          className="field w-full"
+          value={join}
+          onChange={(e) => patch({ join: e.target.value as LineStyle['join'] })}
+        >
+          {LINE_JOIN_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </Row>
+
+      <Row label="Patrón">
+        <div className="flex items-center gap-2">
+          <select
+            className="field flex-1"
+            value={selectedDash.value}
+            onChange={(e) => {
+              const found = DASH_PATTERNS.find((d) => d.value === e.target.value);
+              patch({ dash: found?.preview ?? undefined });
+            }}
+          >
+            {DASH_PATTERNS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <DashPreviewSvg pattern={selectedDash.preview} color="var(--ink)" />
+        </div>
+      </Row>
+    </>
+  );
+}
+
+/* ─── TextStyle fields ─── */
 
 function TextStyleFields({ draft, patch }: { draft: TextStyle; patch: (p: Partial<TextStyle>) => void }) {
   return (
@@ -221,6 +519,8 @@ function TextStyleFields({ draft, patch }: { draft: TextStyle; patch: (p: Partia
     </>
   );
 }
+
+/* ─── ParagraphStyle fields ─── */
 
 function ParagraphStyleFields({ draft, patch }: { draft: ParagraphStyle; patch: (p: Partial<ParagraphStyle>) => void }) {
   return (
@@ -260,46 +560,7 @@ function ParagraphStyleFields({ draft, patch }: { draft: ParagraphStyle; patch: 
   );
 }
 
-function BorderStyleFields({ draft, patch }: { draft: BorderStyle; patch: (p: Partial<BorderStyle>) => void }) {
-  return (
-    <>
-      <Row label="Color">
-        <ColorInput value={draft.colorId || '#000000'} onChange={(v) => patch({ colorId: v })} />
-      </Row>
-      <Row label="Grosor (pt)">
-        <NumInput value={draft.lineWidth} min={0} step={0.5} onChange={(v) => patch({ lineWidth: v })} />
-      </Row>
-      <Row label="Radio de esquina">
-        <NumInput value={draft.cornerRadius} min={0} step={1} onChange={(v) => patch({ cornerRadius: v })} />
-      </Row>
-    </>
-  );
-}
-
-function LineStyleFields({ draft, patch }: { draft: LineStyle; patch: (p: Partial<LineStyle>) => void }) {
-  const dashStr = (draft.dash ?? []).join(', ');
-  return (
-    <>
-      <Row label="Grosor (pt)">
-        <NumInput value={draft.width} min={0} step={0.5} onChange={(v) => patch({ width: v })} />
-      </Row>
-      <Row label="Discontinuidad">
-        <input
-          className="field"
-          value={dashStr}
-          placeholder="p.ej. 6, 3"
-          onChange={(e) => {
-            const nums = e.target.value
-              .split(',')
-              .map((n) => parseFloat(n.trim()))
-              .filter((n) => !isNaN(n));
-            patch({ dash: nums.length > 0 ? nums : undefined });
-          }}
-        />
-      </Row>
-    </>
-  );
-}
+/* ─── FillStyle fields ─── */
 
 function FillStyleFields({ draft, patch }: { draft: FillStyle; patch: (p: Partial<FillStyle>) => void }) {
   return (
@@ -326,9 +587,25 @@ function buildDefault(target: StyleEditorTarget): AnyStyleItem {
         keepLinesTogether: 'No', dontWrap: false, hAlign: 'Left',
       } satisfies ParagraphStyle;
     case 'borderStyles':
-      return { id, name: 'Nuevo estilo de borde', colorId: '#000000', lineWidth: 1, cornerRadius: 0 } satisfies BorderStyle;
+      return {
+        id,
+        name: 'Nuevo estilo de borde',
+        colorId: '#000000',
+        lineWidth: 0.25,
+        cap: 'Butt',
+        lineDash: 'Solid',
+        corner: 'Standard',
+        radiusX: 0,
+        radiusY: 0,
+      } satisfies BorderStyle;
     case 'lineStyles':
-      return { id, name: 'Nuevo estilo de línea', width: 1 } satisfies LineStyle;
+      return {
+        id,
+        name: 'Nuevo estilo de línea',
+        width: 0.5,
+        cap: 'Butt',
+        join: 'Round',
+      } satisfies LineStyle;
     case 'fillStyles':
       return { id, name: 'Nuevo relleno', colorId: '#ffffff' } satisfies FillStyle;
   }

@@ -260,6 +260,10 @@ function pathObject(
   if ('fill' in el) b.push(`        <Fill>${esc(el.fill)}</Fill>`);
   b.push(`        <Stroke>${esc(el.stroke)}</Stroke>`);
   b.push(`        <StrokeWidth>${el.strokeWidth}</StrokeWidth>`);
+  const borderStyleId = (el as { borderStyleId?: string }).borderStyleId;
+  if (borderStyleId) b.push(`        <BorderStyleId>${esc(borderStyleId)}</BorderStyleId>`);
+  const lineStyleId = (el as { lineStyleId?: string }).lineStyleId;
+  if (lineStyleId) b.push(`        <LineStyleId>${esc(lineStyleId)}</LineStyleId>`);
   b.push('      </PathObject>');
 }
 
@@ -276,7 +280,6 @@ function flowArea(
   b.push(`        <Id>${esc(el.id)}</Id>`);
   posSize(b, el);
   b.push(`        <FlowId>${esc(flowId)}</FlowId>`);
-  b.push('        <BorderStyleId/>');
   b.push('        <FlowingToNextPage>False</FlowingToNextPage>');
   if (el.type === 'text') {
     b.push(`        <FontFamily>${esc(el.fontFamily)}</FontFamily>`);
