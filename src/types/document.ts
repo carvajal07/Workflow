@@ -1,5 +1,9 @@
 export type Unit = 'mm' | 'pt' | 'px';
 
+export type CapStyle = 'Butt' | 'Round' | 'Square';
+export type LineDashStyle = 'Solid' | 'Dashed' | 'Dotted' | 'DashDot';
+export type CornerStyle = 'Standard' | 'Round' | 'Bevel';
+
 export type ElementType =
   | 'text'
   | 'rect'
@@ -61,6 +65,8 @@ export interface RectEl extends BaseEl {
   stroke: string;
   strokeWidth: number;
   cornerRadius: number;
+  dash?: number[];
+  borderStyleId?: string;
 }
 
 export interface CircleEl extends BaseEl {
@@ -68,6 +74,8 @@ export interface CircleEl extends BaseEl {
   fill: string;
   stroke: string;
   strokeWidth: number;
+  dash?: number[];
+  borderStyleId?: string;
 }
 
 export interface LineEl extends BaseEl {
@@ -76,6 +84,7 @@ export interface LineEl extends BaseEl {
   stroke: string;
   strokeWidth: number;
   dash?: number[];
+  lineStyleId?: string;
 }
 
 export interface PenEl extends BaseEl {
@@ -84,6 +93,7 @@ export interface PenEl extends BaseEl {
   stroke: string;
   strokeWidth: number;
   tension: number;
+  lineStyleId?: string;
 }
 
 export interface ImageEl extends BaseEl {
@@ -135,6 +145,8 @@ export interface FrameEl extends BaseEl {
   strokeWidth: number;
   cornerRadius: number;
   padding: { top: number; right: number; bottom: number; left: number };
+  dash?: number[];
+  borderStyleId?: string;
 }
 
 export interface FlowableEl extends BaseEl {
@@ -144,6 +156,8 @@ export interface FlowableEl extends BaseEl {
   stroke: string;
   strokeWidth: number;
   flowType: 'content' | 'paragraph' | 'spacer' | 'table' | 'image';
+  dash?: number[];
+  borderStyleId?: string;
 }
 
 export type ElementModel =
@@ -219,13 +233,20 @@ export interface BorderStyle {
   name: string;
   colorId: string;
   lineWidth: number;
-  cornerRadius: number;
+  cap: CapStyle;
+  lineDash: LineDashStyle;
+  corner: CornerStyle;
+  radiusX: number;
+  radiusY: number;
 }
 
 export interface LineStyle {
   id: string;
   name: string;
+  colorId?: string;
   width: number;
+  cap: CapStyle;
+  join: 'Miter' | 'Round' | 'Bevel';
   dash?: number[];
 }
 

@@ -27,6 +27,8 @@ export default function CircleElement({ el, zoom, onSelect, onChange, draggable 
       fill={el.fill}
       stroke={el.stroke}
       strokeWidth={el.strokeWidth * s}
+      dash={el.dash?.map((v) => v * s)}
+      dashEnabled={!!el.dash?.length}
       visible={el.visible}
       draggable={draggable && !el.locked}
       onMouseDown={(e) => onSelect(el.id, e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey)}

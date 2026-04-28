@@ -5,8 +5,18 @@ import { useSelectionStore } from '@/store/selectionStore';
 import type {
   TextStyle, ParagraphStyle, BorderStyle, LineStyle, FillStyle,
   ElementModel, TextEl, RectEl, CircleEl, LineEl, PenEl, FrameEl, FlowableEl,
+  LineDashStyle,
 } from '@/types/document';
 import StyleEditorModal, { type StyleEditorTarget } from './StyleEditorModal';
+
+function getDashPattern(lineDash: LineDashStyle): number[] | undefined {
+  switch (lineDash) {
+    case 'Dashed': return [8, 4];
+    case 'Dotted': return [2, 4];
+    case 'DashDot': return [8, 4, 2, 4];
+    default: return undefined;
+  }
+}
 
 /* ─── Qué estilos aplican a cada tipo de elemento ─── */
 
@@ -68,21 +78,28 @@ function applyStyle(el: ElementModel, key: StyleKey, style: unknown, update: (id
     }
     case 'borderStyles': {
       const s = style as BorderStyle;
+      const dash = getDashPattern(s.lineDash ?? 'Solid');
+      const cornerRadius = (s.corner ?? 'Standard') === 'Round' ? (s.radiusX ?? 0) : 0;
+      const base = { stroke: s.colorId, strokeWidth: s.lineWidth, dash, borderStyleId: s.id };
       if (el.type === 'rect' || el.type === 'frame') {
-        update(el.id, { stroke: s.colorId, strokeWidth: s.lineWidth, cornerRadius: s.cornerRadius } as Partial<RectEl>);
+        update(el.id, { ...base, cornerRadius } as Partial<RectEl>);
       } else if (el.type === 'circle') {
-        update(el.id, { stroke: s.colorId, strokeWidth: s.lineWidth } as Partial<CircleEl>);
+        update(el.id, base as Partial<CircleEl>);
       } else if (el.type === 'flowable') {
-        update(el.id, { stroke: s.colorId, strokeWidth: s.lineWidth } as Partial<FlowableEl>);
+        update(el.id, base as Partial<FlowableEl>);
       }
       break;
     }
     case 'lineStyles': {
       const s = style as LineStyle;
       if (el.type === 'line') {
-        update(el.id, { strokeWidth: s.width, dash: s.dash } as Partial<LineEl>);
+        const patch: Partial<LineEl> = { strokeWidth: s.width, dash: s.dash, lineStyleId: s.id };
+        if (s.colorId) patch.stroke = s.colorId;
+        update(el.id, patch);
       } else if (el.type === 'pen') {
-        update(el.id, { strokeWidth: s.width } as Partial<PenEl>);
+        const patch: Partial<PenEl> = { strokeWidth: s.width, lineStyleId: s.id };
+        if (s.colorId) patch.stroke = s.colorId;
+        update(el.id, patch);
       }
       break;
     }
@@ -112,6 +129,19 @@ export default function StylesPanel() {
     const set = new Set(selectedIds);
     return doc.pages.flatMap((p) => p.elements).filter((e) => set.has(e.id));
   }, [doc.pages, selectedIds]);
+
+  const allElements = useMemo(() => doc.pages.flatMap((p) => p.elements), [doc.pages]);
+
+  const linkedCounts = useMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    for (const el of allElements) {
+      const bid = (el as { borderStyleId?: string }).borderStyleId;
+      const lid = (el as { lineStyleId?: string }).lineStyleId;
+      if (bid) counts[bid] = (counts[bid] ?? 0) + 1;
+      if (lid) counts[lid] = (counts[lid] ?? 0) + 1;
+    }
+    return counts;
+  }, [allElements]);
 
   const selectedTypes = useMemo(
     () => new Set(selectedElements.map((e) => e.type)),
@@ -203,6 +233,7 @@ export default function StylesPanel() {
                       styleKey={key}
                       item={item}
                       applicable={applicable}
+                      linkedCount={linkedCounts[item.id] ?? 0}
                       onApply={() => handleApply(key, item)}
                       onEdit={() => openEdit(key, item.id)}
                     />
@@ -224,11 +255,12 @@ export default function StylesPanel() {
 /* ─── Fila de estilo individual ─── */
 
 function StyleItem({
-  styleKey, item, applicable, onApply, onEdit,
+  styleKey, item, applicable, linkedCount, onApply, onEdit,
 }: {
   styleKey: StyleKey;
   item: { id: string; name: string } & Record<string, unknown>;
   applicable: boolean;
+  linkedCount: number;
   onApply: () => void;
   onEdit: () => void;
 }) {
@@ -249,6 +281,17 @@ function StyleItem({
       >
         {item.name}
       </span>
+
+      {/* Elementos vinculados */}
+      {linkedCount > 0 && (
+        <span
+          className="text-[9px] font-mono px-1 rounded shrink-0"
+          style={{ background: 'var(--bg-3)', color: 'var(--ink-2)' }}
+          title={`Vinculado en ${linkedCount} elemento${linkedCount !== 1 ? 's' : ''}`}
+        >
+          {linkedCount}
+        </span>
+      )}
 
       {/* Indicador aplicable */}
       {applicable && (
@@ -285,29 +328,37 @@ function StylePreview({ styleKey, item }: { styleKey: StyleKey; item: Record<str
     );
   }
   if (styleKey === 'borderStyles') {
+    const lineDash = item.lineDash as string | undefined;
+    const dash = lineDash === 'Dashed' ? '4 2' : lineDash === 'Dotted' ? '1 2' : lineDash === 'DashDot' ? '4 2 1 2' : undefined;
+    const sw = Math.min(Number(item.lineWidth) || 1, 3);
+    const color = (item.colorId as string) || '#000';
     return (
-      <div
-        className="w-4 h-4 rounded shrink-0"
-        style={{
-          border: `${Math.min(Number(item.lineWidth) || 1, 3)}px solid ${(item.colorId as string) || '#000'}`,
-        }}
-      />
+      <svg width={16} height={16} style={{ flexShrink: 0 }}>
+        <rect
+          x={sw / 2} y={sw / 2}
+          width={16 - sw} height={16 - sw}
+          rx={item.corner === 'Round' ? Math.min(Number(item.radiusX) || 0, 4) : 0}
+          fill="none"
+          stroke={color}
+          strokeWidth={sw}
+          strokeDasharray={dash}
+        />
+      </svg>
     );
   }
   if (styleKey === 'lineStyles') {
     const dash = item.dash as number[] | undefined;
+    const color = (item.colorId as string) || 'var(--ink)';
     return (
-      <div className="w-4 h-4 flex items-center shrink-0">
-        <div
-          className="w-full"
-          style={{
-            height: `${Math.min(Number(item.width) || 1, 3)}px`,
-            background: 'var(--ink)',
-            borderRadius: 2,
-            ...(dash?.length ? { backgroundImage: 'repeating-linear-gradient(90deg,var(--ink) 0 4px,transparent 4px 7px)' } : {}),
-          }}
+      <svg width={16} height={16} style={{ flexShrink: 0 }}>
+        <line
+          x1="1" y1="8" x2="15" y2="8"
+          stroke={color}
+          strokeWidth={Math.min(Number(item.width) || 1, 3)}
+          strokeLinecap="round"
+          strokeDasharray={dash?.join(' ')}
         />
-      </div>
+      </svg>
     );
   }
   if (styleKey === 'textStyles') {
