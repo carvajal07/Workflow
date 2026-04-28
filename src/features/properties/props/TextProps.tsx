@@ -27,15 +27,32 @@ export default function TextProps({ el }: Props) {
     <>
       <SectionTitle>Contenido</SectionTitle>
 
-      <div className="flex flex-col gap-1">
-        <span className="text-ink-2 text-[10px]">Texto</span>
-        <textarea
-          value={el.text}
-          onChange={(e) => up({ text: e.target.value })}
-          rows={3}
-          className="bg-bg-3 border border-line-2 rounded-3 px-1.5 py-1 text-11 font-mono resize-none outline-none w-full"
-        />
-      </div>
+      {(el.spans?.length ?? 0) > 0 ? (
+        <div
+          className="px-2 py-1.5 rounded text-[10px] leading-snug"
+          style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-dim)' }}
+        >
+          Texto enriquecido activo ({el.spans!.length} segmento{el.spans!.length !== 1 ? 's' : ''})
+          — edita en el lienzo con doble clic
+          <button
+            type="button"
+            className="mt-1 block text-[10px] underline opacity-70 hover:opacity-100"
+            onClick={() => up({ spans: [], text: el.text })}
+          >
+            Convertir a texto plano
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <span className="text-ink-2 text-[10px]">Texto</span>
+          <textarea
+            value={el.text}
+            onChange={(e) => up({ text: e.target.value })}
+            rows={3}
+            className="bg-bg-3 border border-line-2 rounded-3 px-1.5 py-1 text-11 font-mono resize-none outline-none w-full"
+          />
+        </div>
+      )}
 
       <SectionTitle>Tipografía</SectionTitle>
 

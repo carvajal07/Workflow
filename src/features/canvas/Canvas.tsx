@@ -15,7 +15,8 @@ import { useToolStore } from '@/store/toolStore';
 import { useSelectionStore } from '@/store/selectionStore';
 import { MM_TO_PX, pxToMm } from '@/utils/units';
 import { nextId } from '@/utils/id';
-import type { DataFieldEl, ImageEl, TextEl } from '@/types/document';
+import type { ImageEl, TextEl, TextSpan } from '@/types/document';
+import { spansToPlainText } from '@/utils/richText';
 
 export default function Canvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -231,32 +232,27 @@ export default function Canvas() {
     e.preventDefault();
     const binding = e.dataTransfer.getData('text/x-binding-path');
     if (!binding || !page) return;
+
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const canvasPx = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const xMm = pxToMm(canvasPx.x - offset.x, zoom);
     const yMm = pxToMm(canvasPx.y - offset.y, zoom);
-    const el: DataFieldEl = {
-      id: nextId('el'),
-      type: 'dataField',
-      name: binding.split('.').pop() ?? binding,
-      x: Math.max(0, xMm),
-      y: Math.max(0, yMm),
-      width: 60,
-      height: 8,
-      rotation: 0,
-      visible: true,
-      locked: false,
-      zIndex: nextZIndex(),
-      binding,
-      fallback: '',
-      fontFamily: 'Helvetica',
-      fontSize: 12,
-      color: '#000000',
-    };
-    addElement(page.id, el);
-    select([el.id]);
-    setActiveTool('select');
+
+    // Find text element under the drop point
+    const target = page.elements.find(
+      (el) => el.type === 'text' && xMm >= el.x && xMm <= el.x + el.width && yMm >= el.y && yMm <= el.y + el.height,
+    ) as TextEl | undefined;
+
+    if (!target) return; // variables only go into text elements
+
+    const varSpan: TextSpan = { binding, color: '#902774' };
+    const existing: TextSpan[] = target.spans?.length
+      ? target.spans
+      : target.text ? [{ text: target.text }] : [];
+    const newSpans = [...existing, varSpan];
+    updateElement(target.id, { spans: newSpans, text: spansToPlainText(newSpans) });
+    select([target.id]);
   }
 
   function onMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
@@ -384,8 +380,8 @@ export default function Canvas() {
           zoom={zoom}
           offsetX={offset.x}
           offsetY={offset.y}
-          onCommit={(text) => {
-            updateElement(editingEl.id, { text });
+          onCommit={(spans) => {
+            updateElement(editingEl.id, { spans, text: spansToPlainText(spans) });
             setEditing(null);
           }}
           onCancel={() => setEditing(null)}

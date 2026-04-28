@@ -28,9 +28,23 @@ export interface BaseEl {
   layer?: string;
 }
 
+/** Fragmento de texto enriquecido con estilos propios opcionales. */
+export interface TextSpan {
+  text?: string;      // texto literal (mutuamente exclusivo con binding)
+  binding?: string;   // ruta JSON de variable, e.g. "persona.nombre"
+  fallback?: string;  // valor cuando binding no tiene datos
+  fontFamily?: string;
+  fontSize?: number;  // en pt
+  fontWeight?: number;
+  fontStyle?: 'normal' | 'italic';
+  textDecoration?: 'underline' | 'line-through';
+  color?: string;
+}
+
 export interface TextEl extends BaseEl {
   type: 'text';
-  text: string;
+  text: string;            // texto plano (se mantiene sincronizado con spans)
+  spans?: TextSpan[];      // texto enriquecido; anula text en render cuando está presente
   fontFamily: string;
   fontSize: number;
   fontStyle: 'normal' | 'italic';
