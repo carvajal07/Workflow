@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
-import { Database, RefreshCw, Upload, ChevronDown, ChevronRight, Link, Unlink } from 'lucide-react';
+import { Database, RefreshCw, Upload, ChevronDown, ChevronRight, Link } from 'lucide-react';
 import { useDocumentStore } from '@/store/documentStore';
-import { useSelectionStore } from '@/store/selectionStore';
 import { nextId } from '@/utils/id';
-import type { DataFieldEl } from '@/types/document';
+import { spansToPlainText } from '@/utils/richText';
+import type { TextEl } from '@/types/document';
 
 /* ─── Tipos de valor JSON ─── */
 
@@ -32,18 +32,15 @@ interface NodeProps {
   path: string;
   depth: number;
   usedPaths: Set<string>;
-  selectedDataFieldId: string | null;
-  onBind: (path: string) => void;
   onCreate: (path: string) => void;
 }
 
-function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId, onBind, onCreate }: NodeProps) {
+function JsonNode({ keyName, value, path, depth, usedPaths, onCreate }: NodeProps) {
   const type = jsonType(value);
   const isExpandable = type === 'object' || type === 'array';
   const [open, setOpen] = useState(depth < 2);
 
   const isUsed = usedPaths.has(path);
-  const canBind = selectedDataFieldId !== null && !isExpandable;
 
   /* Schema children — for arrays, use first element as schema sample */
   const entries: [string, unknown][] = (() => {
@@ -72,15 +69,9 @@ function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId,
           e.dataTransfer.setData('text/x-binding-path', path);
           e.dataTransfer.effectAllowed = 'copy';
         }}
-        onClick={() => {
-          if (isExpandable) setOpen((o) => !o);
-          else if (canBind) onBind(path);
-        }}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          onCreate(path);
-        }}
-        title={canBind ? `Vincular "${path}" al campo seleccionado` : `Doble clic o arrastrar al lienzo para crear campo`}
+        onClick={() => { if (isExpandable) setOpen((o) => !o); }}
+        onDoubleClick={(e) => { e.stopPropagation(); onCreate(path); }}
+        title={`Doble clic: crear texto con variable · Arrastra sobre un texto del lienzo`}
       >
         {/* Expand chevron */}
         <span className="w-3 shrink-0 flex items-center justify-center text-muted">
@@ -118,19 +109,12 @@ function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId,
         {/* Spacer for expandable nodes */}
         {isExpandable && <span className="flex-1" />}
 
-        {/* Indicators */}
-        <span className="flex items-center gap-1 shrink-0">
-          {isUsed && (
-            <span title={`Vinculado en canvas (${path})`}>
-              <Link size={10} style={{ color: 'var(--accent)' }} />
-            </span>
-          )}
-          {canBind && !isUsed && (
-            <span className="opacity-0 group-hover:opacity-100 transition-opacity" title="Click para vincular">
-              <Unlink size={10} className="text-muted" />
-            </span>
-          )}
-        </span>
+        {/* Indicador: en uso */}
+        {isUsed && (
+          <span title={`Variable usada en canvas (${path})`} className="shrink-0">
+            <Link size={10} style={{ color: 'var(--accent)' }} />
+          </span>
+        )}
       </div>
 
       {/* Hijos */}
@@ -144,8 +128,6 @@ function JsonNode({ keyName, value, path, depth, usedPaths, selectedDataFieldId,
               path={path ? `${path}.${k}` : k}
               depth={depth + 1}
               usedPaths={usedPaths}
-              selectedDataFieldId={selectedDataFieldId}
-              onBind={onBind}
               onCreate={onCreate}
             />
           ))}
@@ -163,27 +145,19 @@ export default function DataPanel() {
   const setJsonData   = useDocumentStore((s) => s.setJsonData);
   const pages         = useDocumentStore((s) => s.doc.pages);
   const currentPageId = useDocumentStore((s) => s.currentPageId);
-  const updateElement = useDocumentStore((s) => s.updateElement);
-  const addElement    = useDocumentStore((s) => s.addElement);
-  const selectedIds   = useSelectionStore((s) => s.selectedIds);
-  const fileRef       = useRef<HTMLInputElement>(null);
+  const addElement = useDocumentStore((s) => s.addElement);
+  const fileRef    = useRef<HTMLInputElement>(null);
 
   const page = pages.find((p) => p.id === currentPageId) ?? pages[0];
 
-  /* Campo seleccionado (solo si es dataField único) */
-  const selectedDataField: DataFieldEl | null = (() => {
-    if (selectedIds.length !== 1) return null;
-    const el = pages.flatMap((p) => p.elements).find((e) => e.id === selectedIds[0]);
-    return el?.type === 'dataField' ? (el as DataFieldEl) : null;
-  })();
-
-  /* Rutas actualmente usadas en el canvas */
+  /* Rutas usadas en el canvas (via spans de TextEl) */
   const usedPaths = new Set(
     pages.flatMap((p) =>
       p.elements
-        .filter((e) => e.type === 'dataField')
-        .map((e) => (e as DataFieldEl).binding)
-        .filter(Boolean),
+        .filter((e) => e.type === 'text')
+        .flatMap((e) => (e as TextEl).spans ?? [])
+        .map((s) => s.binding)
+        .filter((b): b is string => !!b),
     ),
   );
 
@@ -203,21 +177,16 @@ export default function DataPanel() {
     e.target.value = '';
   }
 
-  function handleBind(path: string) {
-    if (selectedDataField) {
-      updateElement(selectedDataField.id, { binding: path } as Partial<DataFieldEl>);
-    }
-  }
-
   function handleCreate(path: string) {
     if (!page) return;
     const nextZ = page.elements.length > 0
       ? Math.max(...page.elements.map((e) => e.zIndex)) + 1
       : 1;
     const name = path.split('.').pop() ?? path;
-    const el: DataFieldEl = {
+    const spans = [{ binding: path, color: '#902774' }];
+    const el: TextEl = {
       id: nextId('el'),
-      type: 'dataField',
+      type: 'text',
       name,
       x: 20,
       y: 20,
@@ -227,10 +196,14 @@ export default function DataPanel() {
       visible: true,
       locked: false,
       zIndex: nextZ,
-      binding: path,
-      fallback: '',
+      text: spansToPlainText(spans),
+      spans,
       fontFamily: 'Helvetica',
       fontSize: 12,
+      fontStyle: 'normal',
+      fontWeight: 400,
+      align: 'left',
+      lineHeight: 1.2,
       color: '#000000',
     };
     addElement(page.id, el);
@@ -315,15 +288,9 @@ export default function DataPanel() {
           className="shrink-0 px-3 py-1.5 text-[10px]"
           style={{ borderBottom: '1px solid var(--line-2)', background: 'var(--bg-2)' }}
         >
-          {selectedDataField
-            ? <>
-                <span style={{ color: 'var(--accent)' }}>● </span>
-                Campo <strong className="text-ink">{selectedDataField.binding || 'sin binding'}</strong> seleccionado —
-                clic en hoja para vincular
-              </>
-            : <span className="text-muted">
-                Doble clic o arrastra un campo al lienzo para crearlo
-              </span>}
+          <span className="text-muted">
+            Doble clic → crea texto con variable · Arrastra sobre un texto del lienzo
+          </span>
         </div>
       )}
 
@@ -338,8 +305,6 @@ export default function DataPanel() {
               path={k}
               depth={0}
               usedPaths={usedPaths}
-              selectedDataFieldId={selectedDataField?.id ?? null}
-              onBind={handleBind}
               onCreate={handleCreate}
             />
           ))}
