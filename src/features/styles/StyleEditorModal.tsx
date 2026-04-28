@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import type {
   TextStyle, ParagraphStyle, BorderStyle, LineStyle, FillStyle,
-  CapStyle, LineDashStyle, CornerStyle,
+  CapStyle, LineDashStyle, CornerStyle, BorderParts,
 } from '@/types/document';
 import { useDocumentStore, type StyleKey, type AnyStyleItem } from '@/store/documentStore';
 import { nextId } from '@/utils/id';
@@ -302,102 +302,367 @@ function BorderPreview({ draft }: { draft: BorderStyle }) {
   );
 }
 
+/* ─── Default parts (all enabled) ─── */
+
+const ALL_PARTS_ON: BorderParts = {
+  top: true, right: true, bottom: true, left: true,
+  cornerTL: true, cornerTR: true, cornerBR: true, cornerBL: true,
+  diagLR: true, diagRL: true,
+};
+
+/* ─── Border 10-part visual selector ─── */
+
+function BorderPartSelector({
+  parts,
+  color,
+  onChange,
+}: {
+  parts: BorderParts;
+  color: string;
+  onChange: (p: BorderParts) => void;
+}) {
+  const W = 120, H = 100;
+  const pad = 14, cornerLen = 14;
+  // Rectangle bounds
+  const x0 = pad, y0 = pad, x1 = W - pad, y1 = H - pad;
+
+  function toggle(key: keyof BorderParts) {
+    onChange({ ...parts, [key]: !parts[key] });
+  }
+
+  const active = color || '#22c55e';
+  const dim = 'var(--line-2)';
+  const hitPad = 5;
+
+  // Side stroke width for display
+  const sw = 2.5;
+
+  return (
+    <div
+      className="flex flex-col items-center gap-1.5 py-2 rounded"
+      style={{ background: 'var(--bg-0)', border: '1px solid var(--line-2)' }}
+    >
+      <svg
+        width={W}
+        height={H}
+        style={{ userSelect: 'none', cursor: 'pointer', display: 'block' }}
+      >
+        {/* ─── Diagonals ─── */}
+        {/* diagLR: top-left → bottom-right (↘) */}
+        <line
+          x1={x0} y1={y0} x2={x1} y2={y1}
+          stroke={parts.diagLR ? active : dim}
+          strokeWidth={parts.diagLR ? sw : 1}
+          strokeDasharray={parts.diagLR ? undefined : '3 3'}
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('diagLR')}
+        />
+        {/* diagRL: top-right → bottom-left (↙) */}
+        <line
+          x1={x1} y1={y0} x2={x0} y2={y1}
+          stroke={parts.diagRL ? active : dim}
+          strokeWidth={parts.diagRL ? sw : 1}
+          strokeDasharray={parts.diagRL ? undefined : '3 3'}
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('diagRL')}
+        />
+
+        {/* ─── Sides ─── */}
+        {/* Top */}
+        <line
+          x1={x0 + cornerLen} y1={y0}
+          x2={x1 - cornerLen} y2={y0}
+          stroke={parts.top ? active : dim}
+          strokeWidth={parts.top ? sw : 1}
+          strokeLinecap="butt"
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('top')}
+        />
+        {/* Bottom */}
+        <line
+          x1={x0 + cornerLen} y1={y1}
+          x2={x1 - cornerLen} y2={y1}
+          stroke={parts.bottom ? active : dim}
+          strokeWidth={parts.bottom ? sw : 1}
+          strokeLinecap="butt"
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('bottom')}
+        />
+        {/* Left */}
+        <line
+          x1={x0} y1={y0 + cornerLen}
+          x2={x0} y2={y1 - cornerLen}
+          stroke={parts.left ? active : dim}
+          strokeWidth={parts.left ? sw : 1}
+          strokeLinecap="butt"
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('left')}
+        />
+        {/* Right */}
+        <line
+          x1={x1} y1={y0 + cornerLen}
+          x2={x1} y2={y1 - cornerLen}
+          stroke={parts.right ? active : dim}
+          strokeWidth={parts.right ? sw : 1}
+          strokeLinecap="butt"
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('right')}
+        />
+
+        {/* ─── Corners (L-shapes) ─── */}
+        {/* TL */}
+        <polyline
+          points={`${x0},${y0 + cornerLen} ${x0},${y0} ${x0 + cornerLen},${y0}`}
+          fill="none"
+          stroke={parts.cornerTL ? active : dim}
+          strokeWidth={parts.cornerTL ? sw : 1}
+          strokeLinecap="square"
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('cornerTL')}
+        />
+        {/* TR */}
+        <polyline
+          points={`${x1 - cornerLen},${y0} ${x1},${y0} ${x1},${y0 + cornerLen}`}
+          fill="none"
+          stroke={parts.cornerTR ? active : dim}
+          strokeWidth={parts.cornerTR ? sw : 1}
+          strokeLinecap="square"
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('cornerTR')}
+        />
+        {/* BR */}
+        <polyline
+          points={`${x1},${y1 - cornerLen} ${x1},${y1} ${x1 - cornerLen},${y1}`}
+          fill="none"
+          stroke={parts.cornerBR ? active : dim}
+          strokeWidth={parts.cornerBR ? sw : 1}
+          strokeLinecap="square"
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('cornerBR')}
+        />
+        {/* BL */}
+        <polyline
+          points={`${x0 + cornerLen},${y1} ${x0},${y1} ${x0},${y1 - cornerLen}`}
+          fill="none"
+          stroke={parts.cornerBL ? active : dim}
+          strokeWidth={parts.cornerBL ? sw : 1}
+          strokeLinecap="square"
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggle('cornerBL')}
+        />
+
+        {/* ─── Invisible hit areas for sides (wider click zone) ─── */}
+        <rect x={x0 + cornerLen} y={y0 - hitPad} width={x1 - x0 - cornerLen * 2} height={hitPad * 2}
+          fill="transparent" style={{ cursor: 'pointer' }} onClick={() => toggle('top')} />
+        <rect x={x0 + cornerLen} y={y1 - hitPad} width={x1 - x0 - cornerLen * 2} height={hitPad * 2}
+          fill="transparent" style={{ cursor: 'pointer' }} onClick={() => toggle('bottom')} />
+        <rect x={x0 - hitPad} y={y0 + cornerLen} width={hitPad * 2} height={y1 - y0 - cornerLen * 2}
+          fill="transparent" style={{ cursor: 'pointer' }} onClick={() => toggle('left')} />
+        <rect x={x1 - hitPad} y={y0 + cornerLen} width={hitPad * 2} height={y1 - y0 - cornerLen * 2}
+          fill="transparent" style={{ cursor: 'pointer' }} onClick={() => toggle('right')} />
+      </svg>
+
+      {/* Quick-set buttons */}
+      <div className="flex gap-1 px-2">
+        {[
+          { label: 'Todo', fn: () => onChange({ top: true, right: true, bottom: true, left: true, cornerTL: true, cornerTR: true, cornerBR: true, cornerBL: true, diagLR: false, diagRL: false }) },
+          { label: 'Ninguno', fn: () => onChange({ top: false, right: false, bottom: false, left: false, cornerTL: false, cornerTR: false, cornerBR: false, cornerBL: false, diagLR: false, diagRL: false }) },
+          { label: 'Contorno', fn: () => onChange({ top: true, right: true, bottom: true, left: true, cornerTL: false, cornerTR: false, cornerBR: false, cornerBL: false, diagLR: false, diagRL: false }) },
+        ].map(({ label, fn }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={fn}
+            className="text-[10px] px-2 h-5 rounded"
+            style={{ background: 'var(--bg-3)', color: 'var(--ink-2)', border: '1px solid var(--line-2)' }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── BorderStyleFields with tabs ─── */
+
 function BorderStyleFields({ draft, patch }: { draft: BorderStyle; patch: (p: Partial<BorderStyle>) => void }) {
+  const [tab, setTab] = useState<'border' | 'fill'>('border');
+
   const cap = draft.cap ?? 'Butt';
   const lineDash = draft.lineDash ?? 'Solid';
   const corner = draft.corner ?? 'Standard';
   const radiusX = draft.radiusX ?? 0;
   const radiusY = draft.radiusY ?? 0;
   const selectedDash = DASH_PATTERNS.find((d) => d.value === lineDash) ?? DASH_PATTERNS[0];
+  const parts = draft.parts ?? ALL_PARTS_ON;
 
   return (
     <>
-      {/* Vista previa */}
-      <BorderPreview draft={{ ...draft, cap, lineDash, corner, radiusX, radiusY }} />
-
-      <Divider label="Línea" />
-
-      {/* Color de relleno de línea */}
-      <Row label="Color de línea">
-        <ColorInput value={draft.colorId || '#000000'} onChange={(v) => patch({ colorId: v })} />
-      </Row>
-
-      {/* Grosor */}
-      <Row label="Grosor de línea">
-        <NumInput
-          value={draft.lineWidth}
-          min={0}
-          step={0.05}
-          unit="mm"
-          onChange={(v) => patch({ lineWidth: v })}
-        />
-      </Row>
-
-      {/* Estilo de extremo */}
-      <Row label="Extremo (Cap)">
-        <select
-          className="field w-full"
-          value={cap}
-          onChange={(e) => patch({ cap: e.target.value as CapStyle })}
-        >
-          {CAP_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </Row>
-
-      {/* Patrón de línea */}
-      <Row label="Estilo de línea">
-        <div className="flex items-center gap-2">
-          <select
-            className="field flex-1"
-            value={lineDash}
-            onChange={(e) => patch({ lineDash: e.target.value as LineDashStyle })}
+      {/* ─── Tab bar ─── */}
+      <div
+        className="flex rounded overflow-hidden"
+        style={{ border: '1px solid var(--line-2)' }}
+      >
+        {(['border', 'fill'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className="flex-1 h-7 text-11 font-medium transition-colors"
+            style={
+              tab === t
+                ? { background: 'var(--accent-soft)', color: 'var(--accent)', borderBottom: '2px solid var(--accent)' }
+                : { color: 'var(--ink-2)' }
+            }
           >
-            {DASH_PATTERNS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          <DashPreviewSvg pattern={selectedDash.preview} color="var(--ink)" />
-        </div>
-      </Row>
+            {t === 'border' ? 'Borde' : 'Relleno'}
+          </button>
+        ))}
+      </div>
 
-      <Divider label="Esquinas" />
+      {/* ─── Borde tab ─── */}
+      {tab === 'border' && (
+        <>
+          {/* Vista previa */}
+          <BorderPreview draft={{ ...draft, cap, lineDash, corner, radiusX, radiusY }} />
 
-      {/* Tipo de esquina */}
-      <Row label="Esquina">
-        <select
-          className="field w-full"
-          value={corner}
-          onChange={(e) => patch({ corner: e.target.value as CornerStyle })}
-        >
-          {CORNER_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </Row>
+          {/* Selector 10 partes */}
+          <Divider label="Partes activas" />
+          <BorderPartSelector
+            parts={parts}
+            color={draft.colorId || '#000000'}
+            onChange={(p) => patch({ parts: p })}
+          />
 
-      {/* Radio X */}
-      <Row label="Radio X">
-        <NumInput
-          value={radiusX}
-          min={0}
-          step={0.5}
-          unit="mm"
-          onChange={(v) => patch({ radiusX: v })}
+          <Divider label="Línea" />
+
+          <Row label="Color de línea">
+            <ColorInput value={draft.colorId || '#000000'} onChange={(v) => patch({ colorId: v })} />
+          </Row>
+
+          <Row label="Grosor de línea">
+            <NumInput value={draft.lineWidth} min={0} step={0.05} unit="mm"
+              onChange={(v) => patch({ lineWidth: v })} />
+          </Row>
+
+          <Row label="Extremo (Cap)">
+            <select className="field w-full" value={cap}
+              onChange={(e) => patch({ cap: e.target.value as CapStyle })}>
+              {CAP_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </Row>
+
+          <Row label="Estilo de línea">
+            <div className="flex items-center gap-2">
+              <select className="field flex-1" value={lineDash}
+                onChange={(e) => patch({ lineDash: e.target.value as LineDashStyle })}>
+                {DASH_PATTERNS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <DashPreviewSvg pattern={selectedDash.preview} color="var(--ink)" />
+            </div>
+          </Row>
+
+          <Divider label="Esquinas" />
+
+          <Row label="Esquina">
+            <select className="field w-full" value={corner}
+              onChange={(e) => patch({ corner: e.target.value as CornerStyle })}>
+              {CORNER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </Row>
+
+          <Row label="Radio X">
+            <NumInput value={radiusX} min={0} step={0.5} unit="mm"
+              onChange={(v) => patch({ radiusX: v })} />
+          </Row>
+
+          <Row label="Radio Y">
+            <NumInput value={radiusY} min={0} step={0.5} unit="mm"
+              onChange={(v) => patch({ radiusY: v })} />
+          </Row>
+        </>
+      )}
+
+      {/* ─── Relleno tab ─── */}
+      {tab === 'fill' && (
+        <FillTab
+          fillColor={draft.fillColor}
+          onChange={(v) => patch({ fillColor: v })}
         />
+      )}
+    </>
+  );
+}
+
+/* ─── FillTab ─── */
+
+function FillTab({
+  fillColor,
+  onChange,
+}: {
+  fillColor: string | undefined;
+  onChange: (v: string | undefined) => void;
+}) {
+  const isNone = !fillColor || fillColor === 'none';
+  const color = isNone ? '#ffffff' : fillColor;
+
+  return (
+    <>
+      <Divider label="Sombreado" />
+
+      {/* Preview */}
+      <div
+        className="h-12 rounded flex items-center justify-center text-11"
+        style={{
+          background: isNone
+            ? 'repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0 / 10px 10px'
+            : fillColor,
+          border: '1px solid var(--line-2)',
+          color: 'var(--muted)',
+        }}
+      >
+        {isNone && 'Sin relleno'}
+      </div>
+
+      {/* Toggle */}
+      <Row label="Activar">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!isNone}
+            onChange={(e) => onChange(e.target.checked ? '#ffffff' : undefined)}
+            className="accent-[color:var(--accent)]"
+          />
+          <span className="text-11 text-ink-2">{isNone ? 'Sin relleno' : 'Relleno activo'}</span>
+        </label>
       </Row>
 
-      {/* Radio Y */}
-      <Row label="Radio Y">
-        <NumInput
-          value={radiusY}
-          min={0}
-          step={0.5}
-          unit="mm"
-          onChange={(v) => patch({ radiusY: v })}
-        />
-      </Row>
+      {!isNone && (
+        <>
+          <Row label="Color">
+            <ColorInput value={color} onChange={onChange} />
+          </Row>
+
+          {/* Opacity preview strip */}
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-11 text-muted w-36 shrink-0">Muestra</span>
+            <div
+              className="flex-1 h-6 rounded"
+              style={{
+                background: `linear-gradient(to right, ${fillColor}00, ${fillColor})`,
+                border: '1px solid var(--line-2)',
+              }}
+            />
+          </div>
+        </>
+      )}
     </>
   );
 }

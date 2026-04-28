@@ -228,6 +228,19 @@ export interface ParagraphStyle {
   hAlign: 'Left' | 'Center' | 'Right' | 'Justify';
 }
 
+export interface BorderParts {
+  top: boolean;
+  right: boolean;
+  bottom: boolean;
+  left: boolean;
+  cornerTL: boolean;
+  cornerTR: boolean;
+  cornerBR: boolean;
+  cornerBL: boolean;
+  diagLR: boolean;
+  diagRL: boolean;
+}
+
 export interface BorderStyle {
   id: string;
   name: string;
@@ -238,6 +251,10 @@ export interface BorderStyle {
   corner: CornerStyle;
   radiusX: number;
   radiusY: number;
+  /** Qué partes del borde están activas (undefined = todas activas). */
+  parts?: BorderParts;
+  /** Color de relleno/sombreado del área interior. */
+  fillColor?: string;
 }
 
 export interface LineStyle {
