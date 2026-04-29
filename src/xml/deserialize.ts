@@ -340,10 +340,12 @@ function parseElementsForPage(
       name,
       ...baseProps(id, idx),
       ...ps,
+      barcodeType: 'QR',
       data: '',
       variable,
       errorLevel: err,
       moduleSize: metersToMm(modW),
+      showText: false,
     };
     out.push(el);
   });

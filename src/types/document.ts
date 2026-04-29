@@ -104,13 +104,26 @@ export interface ImageEl extends BaseEl {
   cropY?: number;
 }
 
+export type BarcodeType =
+  | 'QR'
+  | 'EAN13'
+  | 'EAN8'
+  | 'CODE128'
+  | 'CODE39'
+  | 'ITF14'
+  | 'UPC';
+
 export interface TableColumn {
   widthPercent: number;
   minWidth: number;
+  header?: string;
 }
 export interface TableCell {
   text: string;
   align?: 'left' | 'center' | 'right';
+  bold?: boolean;
+  background?: string;
+  color?: string;
 }
 export interface TableEl extends BaseEl {
   type: 'table';
@@ -119,14 +132,24 @@ export interface TableEl extends BaseEl {
   borderWidth: number;
   borderColor: string;
   cellSpacing: number;
+  hasHeader: boolean;
+  hasFooter: boolean;
+  headerBackground: string;
+  footerBackground: string;
+  alternateRows: boolean;
+  alternateBackground: string;
+  repeatBy?: string;
+  rowFontSize: number;
 }
 
 export interface QrEl extends BaseEl {
   type: 'qr';
+  barcodeType: BarcodeType;
   data: string;
   variable?: string;
   errorLevel: 'L' | 'M' | 'Q' | 'H';
   moduleSize: number;
+  showText: boolean;
 }
 
 export interface DataFieldEl extends BaseEl {

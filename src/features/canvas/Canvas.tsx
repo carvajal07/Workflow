@@ -8,6 +8,8 @@ import GuidesLayer from './GuidesLayer';
 import DraftOverlay from './DraftOverlay';
 import SelectionTransformer from './SelectionTransformer';
 import TextEditorOverlay from './TextEditorOverlay';
+import BarcodeCreateDialog from './BarcodeCreateDialog';
+import TableCreateDialog from './TableCreateDialog';
 import { useCanvasDraw } from './useCanvasDraw';
 import { useDocumentStore } from '@/store/documentStore';
 import { useUIStore } from '@/store/uiStore';
@@ -15,7 +17,7 @@ import { useToolStore } from '@/store/toolStore';
 import { useSelectionStore } from '@/store/selectionStore';
 import { MM_TO_PX, pxToMm } from '@/utils/units';
 import { nextId } from '@/utils/id';
-import type { ImageEl, TextEl, TextSpan } from '@/types/document';
+import type { ImageEl, QrEl, TableEl, TextEl, TextSpan } from '@/types/document';
 import { spansToPlainText } from '@/utils/richText';
 
 export default function Canvas() {
@@ -56,6 +58,10 @@ export default function Canvas() {
   // imagen: ref al input oculto y posición pendiente en mm
   const imageInputRef = useRef<HTMLInputElement>(null);
   const pendingImagePosMm = useRef<{ x: number; y: number }>({ x: 20, y: 20 });
+
+  // diálogos de creación
+  const [barcodeDialog, setBarcodeDialog] = useState<{ x: number; y: number } | null>(null);
+  const [tableDialog, setTableDialog] = useState<{ x: number; y: number } | null>(null);
 
   // siguiente zIndex a asignar a un nuevo elemento
   const nextZIndex = useMemo(
@@ -274,6 +280,30 @@ export default function Canvas() {
         imageInputRef.current?.click();
         return;
       }
+      // herramienta código de barras / QR: abrir diálogo de configuración
+      if (activeTool === 'qr') {
+        const stage = e.target.getStage();
+        const p = stage?.getPointerPosition();
+        if (p) {
+          setBarcodeDialog({
+            x: pxToMm(p.x - offset.x, zoom),
+            y: pxToMm(p.y - offset.y, zoom),
+          });
+        }
+        return;
+      }
+      // herramienta tabla: abrir diálogo de configuración
+      if (activeTool === 'table') {
+        const stage = e.target.getStage();
+        const p = stage?.getPointerPosition();
+        if (p) {
+          setTableDialog({
+            x: pxToMm(p.x - offset.x, zoom),
+            y: pxToMm(p.y - offset.y, zoom),
+          });
+        }
+        return;
+      }
       // herramientas de dibujo: iniciar draft y salir
       if (draw.onMouseDown(e)) return;
       if (activeTool === 'select') {
@@ -389,6 +419,36 @@ export default function Canvas() {
           onCancel={() => setEditing(null)}
         />
       )}
+      {barcodeDialog && (
+        <BarcodeCreateDialog
+          posMm={barcodeDialog}
+          zIndex={nextZIndex()}
+          onConfirm={(el: QrEl) => {
+            if (!page) return;
+            addElement(page.id, el);
+            select([el.id]);
+            setActiveTool('select');
+            setBarcodeDialog(null);
+          }}
+          onCancel={() => setBarcodeDialog(null)}
+        />
+      )}
+
+      {tableDialog && (
+        <TableCreateDialog
+          posMm={tableDialog}
+          zIndex={nextZIndex()}
+          onConfirm={(el: TableEl) => {
+            if (!page) return;
+            addElement(page.id, el);
+            select([el.id]);
+            setActiveTool('select');
+            setTableDialog(null);
+          }}
+          onCancel={() => setTableDialog(null)}
+        />
+      )}
+
       <Stage
         ref={stageRef}
         width={size.w}
